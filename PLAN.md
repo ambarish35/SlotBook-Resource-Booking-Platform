@@ -1,6 +1,6 @@
 # SlotBook — Implementation Plan
 
-> **Status: Plan approved on 2026-11-13. M0 (foundation) is built and verified, except for the live Atlas connection, which the Atlas IP access list blocks (see M0).** Every checklist item below stays unchecked until it is built **and** verified.
+> **Status: Plan approved on 2026-11-13. M0 (foundation) is done and verified, including the live Atlas connection. M1 is next.** Every checklist item below stays unchecked until it is built **and** verified.
 > UI rules live in [DESIGN.md](DESIGN.md); working rules for coding agents live in [CLAUDE.md](CLAUDE.md).
 
 ## 1. Goal and scope
@@ -236,7 +236,7 @@ server/   Express + TS                   (src/routes, src/services, src/models, 
 PLAN.md · DESIGN.md · CLAUDE.md · README.md
 ```
 
-### M0: Foundation (≈ 1.5 h). Status: blocked on the Atlas IP access list (everything else verified 2026-11-13)
+### M0: Foundation (≈ 1.5 h). Status: done (verified 2026-11-13)
 
 Checklist
 - [x] npm workspaces root with `client` and `server`
@@ -247,24 +247,20 @@ Checklist
 - [x] Vite dev proxy from `/api` to the API server
 - [x] Vitest + Supertest + `MongoMemoryReplSet`, with a health test and a guard test against a standalone `MongoMemoryServer`
 - [x] Real commands recorded in CLAUDE.md
-- [ ] The API connects to the Atlas cluster in `.env`. **Blocked:** Atlas rejects this machine's IP (see below).
+- [x] The API connects to the Atlas cluster in `.env`
 
 Acceptance (results on 2026-11-13; details in the §12 log)
 - ✅ The client dev URL shows the placeholder shell on the `canvas` background with the SlotBook header (headless Edge screenshots at 1280 px wide and inside a 375 px frame).
-- ⚠️ `GET /api/health` through the client dev server returns 200 `{"status":"ok","db":"connected"}`, but so far only **with a local in-memory replica set standing in for Atlas**. Against Atlas the API can't start yet:
-  - DNS and TCP to port 27017 work.
-  - The TLS handshake is rejected on all 3 cluster servers ("tlsv1 alert internal error", SSL alert 80). Atlas typically does this when the client IP isn't on the project's Network Access list.
+- ✅ `GET /api/health` through the client dev server returns 200 `{"status":"ok","db":"connected"}` against Atlas, and also against a local in-memory replica set.
+  - The first Atlas attempt failed during the TLS handshake (SSL alert 80). This network sends traffic from several public addresses, but the access list held only one.
+  - Allowing the network's address range in Atlas Network Access fixed it.
 - ✅ The guard test refuses a standalone MongoDB with the replica-set message. An unreachable `MONGODB_URI` makes the API exit with code 1 and "Could not connect to MongoDB …".
 - ✅ The typecheck, test (9/9) and build commands succeed and are written into CLAUDE.md.
-
-**To unblock:**
-1. In Atlas, open Security → Network Access, choose Add IP Address → Add current IP address, and wait until the entry is Active.
-2. Run `npm run dev:server` and `npm run dev:client`.
-3. Check `http://localhost:5173/api/health`.
 
 Notes
 - Versions are pinned to work with Node 22.11 (D13). ESLint is allowed but not added yet; the strict typecheck covers M0.
 - The API reads `MONGODB_URI` from the repo-root `.env`; the credentials are inside the URI. It also reads optional `MONGODB_DB_NAME` (default `slotbook`, since the URI names no database) and `PORT`. The other variables in `.env` aren't used.
+- Atlas Network Access must cover every public address the development network uses. A single "current IP" entry wasn't enough here.
 
 ### M1: Accounts and roles (≈ 2.5 h). Status: not started
 
@@ -411,7 +407,10 @@ Manual checks (M5–M7): two-browser conflict test (normal plus private window),
 | 2026-11-13 | M0 | Client shell and tokens | Pass | Token utilities compiled and default palette cleared; headless Edge screenshots at 1280 px and in a 375 px frame show the header, canvas and card with no overflow |
 | 2026-11-13 | M0 | Unreachable and placeholder `MONGODB_URI` | Pass | Exit code 1 with a clear message; environment variables override `.env` |
 | 2026-11-13 | M0 | Credential scan of every log | Pass | No credentials or cluster hostnames in any output |
-| 2026-11-13 | M0 | Dev API against Atlas | **Blocked** | DNS and TCP 27017 OK; TLS rejected by all 3 servers (SSL alert 80), so this machine's IP isn't on the Atlas Network Access list |
+| 2026-11-13 | M0 | Dev API against Atlas | **Blocked** | DNS and TCP 27017 OK; TLS rejected by all 3 servers (SSL alert 80). The access list didn't cover the address this traffic leaves from, because the network uses several public IPs |
+| 2026-11-13 | M0 | Dev API and Vite proxy against Atlas, after allowing the network's address range | Pass | `/api/health` 200 on :4000 and through :5173; replica set and transactions verified |
+| 2026-11-13 | M0 | `npm start` against Atlas | Pass | `/api/health` 200 on :4001 |
+| 2026-11-13 | M0 | Credential scan of the Atlas run logs | Pass | No credentials or cluster hostnames |
 
 ## 13. Decisions (confirmed 2026-11-13)
 

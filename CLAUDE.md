@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-SlotBook is a MERN app for booking meeting rooms and shared equipment within one organization. **Status: M0 (foundation) is implemented. Its live Atlas check is pending because of the Atlas IP access list (PLAN.md M0). M1 comes next.**
+SlotBook is a MERN app for booking meeting rooms and shared equipment within one organization. **Status: M0 (foundation) is done and verified. M1 (accounts and roles) is next.**
 
 ## Before implementing
 
@@ -37,6 +37,6 @@ Development needs two terminals, one for `npm run dev:server` and one for `npm r
 
 - Node.js 22.11 on the dev machine. Dependencies are pinned to majors that support it (PLAN.md D13).
 - `.env` lives at the repo root. The API reads `MONGODB_URI` (credentials inside), plus optional `MONGODB_DB_NAME` (default `slotbook`) and `PORT` (default 4000). Real environment variables override `.env`.
-- MongoDB must be a replica set because bookings use transactions; the API refuses to start otherwise. Atlas only accepts IP addresses on the project's Network Access list. Tests use the replica set from `mongodb-memory-server`.
+- MongoDB must be a replica set because bookings use transactions; the API refuses to start otherwise. Atlas only accepts IP addresses on the project's Network Access list. The development network uses several public IPs, so the list needs the network's address range, not a single IP. Tests use the replica set from `mongodb-memory-server`.
 - Business times are IST and storage is UTC (PLAN.md §10).
 - Secrets live in `.env` and other `*.env` files, which git ignores. Keep `.env.example` current, with placeholders only.
