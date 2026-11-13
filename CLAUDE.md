@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-SlotBook is a MERN app for booking meeting rooms and shared equipment within one organization. **Status: plan approved on 2026-11-13; implementation starts with M0. No application code exists yet.**
+SlotBook is a MERN app for booking meeting rooms and shared equipment within one organization. **Status: M0 (foundation) is implemented. Its live Atlas check is pending because of the Atlas IP access list (PLAN.md M0). M1 comes next.**
 
 ## Before implementing
 
@@ -19,11 +19,24 @@ SlotBook is a MERN app for booking meeting rooms and shared equipment within one
 
 ## Commands
 
-_Not established yet._ During M0, record the exact install, dev, build, typecheck, test and seed commands here, each only after it has run successfully.
+Run these from the repo root. Each one ran successfully during M0 (2026-11-13).
+
+| Command | What it does |
+|---|---|
+| `npm install` | Installs both workspaces (`client/`, `server/`) |
+| `npm run dev:server` | API with reload on http://localhost:4000; reads the repo-root `.env` |
+| `npm run dev:client` | Client on http://localhost:5173; forwards `/api` to port 4000 |
+| `npm run typecheck` | TypeScript checks for client and server |
+| `npm test` | Server tests (Vitest + Supertest on an in-memory MongoDB replica set) |
+| `npm run build` | Builds `client/dist` and `server/dist` |
+| `npm start` | Runs the built API from `server/dist` |
+
+Development needs two terminals, one for `npm run dev:server` and one for `npm run dev:client`. A seed command arrives in M1.
 
 ## Environment
 
-- Node.js 22 LTS, npm workspaces (`client/`, `server/`).
-- MongoDB must be a replica set because bookings use transactions. Use an Atlas cluster for development; tests use the replica set from `mongodb-memory-server`.
+- Node.js 22.11 on the dev machine. Dependencies are pinned to majors that support it (PLAN.md D13).
+- `.env` lives at the repo root. The API reads `MONGODB_URI` (credentials inside), plus optional `MONGODB_DB_NAME` (default `slotbook`) and `PORT` (default 4000). Real environment variables override `.env`.
+- MongoDB must be a replica set because bookings use transactions; the API refuses to start otherwise. Atlas only accepts IP addresses on the project's Network Access list. Tests use the replica set from `mongodb-memory-server`.
 - Business times are IST and storage is UTC (PLAN.md §10).
-- Secrets live in `.env`, which git ignores. Keep `.env.example` up to date.
+- Secrets live in `.env` and other `*.env` files, which git ignores. Keep `.env.example` current, with placeholders only.

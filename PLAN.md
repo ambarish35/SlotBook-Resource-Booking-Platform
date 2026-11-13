@@ -1,6 +1,6 @@
 # SlotBook — Implementation Plan
 
-> **Status: Plan approved on 2026-11-13; implementation has not started.** No application code exists yet. Every checklist item below stays unchecked until it is built **and** verified.
+> **Status: Plan approved on 2026-11-13. M0 (foundation) is built and verified, except for the live Atlas connection, which the Atlas IP access list blocks (see M0).** Every checklist item below stays unchecked until it is built **and** verified.
 > UI rules live in [DESIGN.md](DESIGN.md); working rules for coding agents live in [CLAUDE.md](CLAUDE.md).
 
 ## 1. Goal and scope
@@ -197,8 +197,10 @@ Each booking is one **parent** record in `bookings` plus one **child** slot reco
 
 1. Load the booking. If it doesn't exist, or the caller is a member who doesn't own it → 404 (the same response in both cases). Admins may cancel any booking.
 2. It must be `confirmed` and not yet started, otherwise 409 `BOOKING_NOT_CANCELLABLE`.
-3. In one transaction: conditionally update the parent's `status` from `confirmed` to `cancelled` and set `cancelledAt` and `cancelledBy`. If nothing matched because a concurrent cancel won, abort with 409. Then delete all of the booking's child slot records (`{ booking: id }`). Either both changes happen or neither does.
-4. On commit → 200. With its slot records gone, the unique index no longer blocks those slots, so they can be booked again immediately. The parent keeps `slotStarts`, so the cancelled booking still shows its times in History. Only whole bookings can be cancelled.
+3. In **one MongoDB transaction** (a single session), do both of the following. Either both commit or neither does.
+   - Conditionally update the parent's `status` from `confirmed` to `cancelled` and set `cancelledAt` and `cancelledBy`. If nothing matched because a concurrent cancel won, abort with 409.
+   - Delete all of the booking's child slot records (`{ booking: id }`).
+4. On commit → 200. With its slot records gone, the unique index no longer blocks those slots, so they can be booked again immediately. Cancellation never changes the parent's `date`, `slotStarts`, `start` or `end`, so History still shows the original times. Only whole bookings can be cancelled.
 
 Slot records are deleted rather than marked cancelled. That way an existing slot record always means the slot is taken, and the unique index needs no filter.
 
@@ -206,7 +208,7 @@ Slot records are deleted rather than marked cancelled. That way an existing slot
 
 Booking and cancellation use **multi-document transactions, which need a replica set or sharded cluster**. A standalone `mongod` rejects them.
 
-- **Development:** a free MongoDB Atlas cluster (every Atlas cluster is a replica set), so nothing needs to be installed. A local single-node replica set (`mongod --replSet rs0`, then `rs.initiate()` once) also works.
+- **Development:** a free MongoDB Atlas cluster (every Atlas cluster is a replica set), so nothing needs to be installed. Atlas accepts connections only from IP addresses on the project's **Network Access** list; from any other address the TLS handshake fails. A local single-node replica set (`mongod --replSet rs0`, then `rs.initiate()` once) also works.
 - **Tests:** `MongoMemoryReplSet` from `mongodb-memory-server`, using the `wiredTiger` storage engine. This runs real transactions without an external database; the first run downloads a MongoDB binary.
 - **Production (stretch):** Atlas.
 - **Startup guard:** on boot the server runs `hello`. If the deployment is neither a replica set nor `mongos`, it exits with "SlotBook needs a MongoDB replica set (transactions)". It then builds indexes (`Model.init()`) before accepting requests, because the unique index on slot records must exist before the first booking.
@@ -234,23 +236,35 @@ server/   Express + TS                   (src/routes, src/services, src/models, 
 PLAN.md · DESIGN.md · CLAUDE.md · README.md
 ```
 
-### M0: Foundation (≈ 1.5 h). Status: not started
+### M0: Foundation (≈ 1.5 h). Status: blocked on the Atlas IP access list (everything else verified 2026-11-13)
 
 Checklist
-- [ ] npm workspaces root with `client` and `server`
-- [ ] Client: Vite React-TS app, Tailwind v4 (`@tailwindcss/vite`), DESIGN.md tokens in `@theme`, React Router, placeholder app shell
-- [ ] Server: Express 5 + TypeScript (`tsx` in development, `tsc` for builds), with `app.ts` separate from `index.ts`
-- [ ] Config loaded from `.env` by Node's built-in loader and validated with Zod; `.env.example` committed
-- [ ] DB connection with the replica-set guard and index build (§9); `GET /api/health`
-- [ ] Vite dev proxy from `/api` to the API server
-- [ ] Vitest + Supertest + `MongoMemoryReplSet`, with a health test and a guard test against a standalone `MongoMemoryServer`
-- [ ] Real commands recorded in CLAUDE.md
+- [x] npm workspaces root with `client` and `server`
+- [x] Client: Vite React-TS app, Tailwind v4 (`@tailwindcss/vite`), DESIGN.md tokens in `@theme`, React Router, placeholder app shell
+- [x] Server: Express 5 + TypeScript (`tsx` in development, `tsc` for builds), with `app.ts` separate from `index.ts`
+- [x] Config loaded from the repo-root `.env` by Node's built-in loader and validated with Zod (real environment variables win); `.env.example` committed; `*.env` files ignored
+- [x] DB connection with the replica-set guard, a read-only test transaction and the index build (§9); `GET /api/health`
+- [x] Vite dev proxy from `/api` to the API server
+- [x] Vitest + Supertest + `MongoMemoryReplSet`, with a health test and a guard test against a standalone `MongoMemoryServer`
+- [x] Real commands recorded in CLAUDE.md
+- [ ] The API connects to the Atlas cluster in `.env`. **Blocked:** Atlas rejects this machine's IP (see below).
 
-Acceptance
-- The client dev URL shows the placeholder shell on the `canvas` background with the SlotBook header.
-- `GET /api/health` through the client dev server returns 200 `{"status":"ok","db":"connected"}`.
-- The guard test shows startup against a standalone MongoDB failing with the replica-set message. An unreachable `MONGODB_URI` makes the API exit with a clear error.
-- The typecheck, test and build commands succeed with their output observed, and are written into CLAUDE.md.
+Acceptance (results on 2026-11-13; details in the §12 log)
+- ✅ The client dev URL shows the placeholder shell on the `canvas` background with the SlotBook header (headless Edge screenshots at 1280 px wide and inside a 375 px frame).
+- ⚠️ `GET /api/health` through the client dev server returns 200 `{"status":"ok","db":"connected"}`, but so far only **with a local in-memory replica set standing in for Atlas**. Against Atlas the API can't start yet:
+  - DNS and TCP to port 27017 work.
+  - The TLS handshake is rejected on all 3 cluster servers ("tlsv1 alert internal error", SSL alert 80). Atlas typically does this when the client IP isn't on the project's Network Access list.
+- ✅ The guard test refuses a standalone MongoDB with the replica-set message. An unreachable `MONGODB_URI` makes the API exit with code 1 and "Could not connect to MongoDB …".
+- ✅ The typecheck, test (9/9) and build commands succeed and are written into CLAUDE.md.
+
+**To unblock:**
+1. In Atlas, open Security → Network Access, choose Add IP Address → Add current IP address, and wait until the entry is Active.
+2. Run `npm run dev:server` and `npm run dev:client`.
+3. Check `http://localhost:5173/api/health`.
+
+Notes
+- Versions are pinned to work with Node 22.11 (D13). ESLint is allowed but not added yet; the strict typecheck covers M0.
+- The API reads `MONGODB_URI` from the repo-root `.env`; the credentials are inside the URI. It also reads optional `MONGODB_DB_NAME` (default `slotbook`, since the URI names no database) and `PORT`. The other variables in `.env` aren't used.
 
 ### M1: Accounts and roles (≈ 2.5 h). Status: not started
 
@@ -376,7 +390,7 @@ The automated checks run with Vitest and Supertest against the real Express app 
 | V1 | **Concurrent booking:** 10 members send `POST /api/bookings` for the same resource and slot at the same moment | Exactly one 201 and nine 409 `SLOT_UNAVAILABLE`; one confirmed booking; one slot record for that slot |
 | V1b | Two members at the same moment request overlapping selections `[10:00, 10:30]` and `[10:30, 11:00]` | Exactly one succeeds; the other ends up with no parent booking and no slot records |
 | V2 | **Partial overlap:** A holds 10:00 and 10:30; B requests 10:30 and 11:00 | The whole request is rejected: 409 listing only 10:30 (`booked`); no parent booking and no slot records exist for B, so 11:00 is still free. B then books 11:00 alone → 201 (adjacent slots are fine) |
-| V3 | **Cancellation:** A cancels the booking from V2 | 200; the parent is `cancelled` and all its slot records are gone; availability shows 10:00 and 10:30 as available; B books 10:30 → 201 |
+| V3 | **Cancellation:** A cancels the booking from V2 | 200; the parent is `cancelled` with its `date`, `slotStarts`, `start` and `end` unchanged, and all its slot records are gone; availability shows 10:00 and 10:30 as available; B books 10:30 → 201 |
 | V3b | Cancellation edge cases | A second cancel → 409; cancelling a started booking → 409; a member cancelling another member's booking → 404, the same body as for an unknown id, and nothing changes; owner and admin cancelling the same booking at the same moment → one 200 and one 409; an admin cancelling a member's booking → 200 |
 | V4 | **Unauthorized access** | No cookie → 401 on resources, availability, booking, my bookings and cancel; a tampered or expired token → 401; member → 403 on `POST` and `PATCH /api/resources` and on `GET /api/bookings`; `role` ignored at registration; member → 404 for an inactive resource's detail, availability and booking; member → 404 when cancelling another member's booking |
 | V5 | Time and validation | 08:00 IST ⇄ `02:30Z`; IST date rollover at 18:30Z; past slot → 409 `past`; starts at 10:15, 07:30 or 20:00 → 400; mixed dates, duplicate slots, more than 8 slots or a date beyond +30 days → 400 |
@@ -388,6 +402,16 @@ Manual checks (M5–M7): two-browser conflict test (normal plus private window),
 
 | Date | Milestone | Check | Result | Notes |
 |---|---|---|---|---|
+| 2026-11-13 | M0 | `npm install` | Pass | 270 packages, 0 vulnerabilities, no engine warnings |
+| 2026-11-13 | M0 | `npm run typecheck` | Pass | Client and server |
+| 2026-11-13 | M0 | `npm test` | Pass | 9 tests in 3 files: health (ok, 503), guard (standalone refused, unreachable), config validation and credential redaction |
+| 2026-11-13 | M0 | `npm run build` | Pass | `client/dist` (CSS 9.87 kB, JS 318.86 kB) and `server/dist` |
+| 2026-11-13 | M0 | Dev API and Vite proxy, in-memory replica set standing in for Atlas | Pass | `/api/health` 200 directly on :4000 and through :5173 |
+| 2026-11-13 | M0 | Built API (`npm start`, `node server/dist/index.js`), in-memory replica set | Pass | `/api/health` 200 |
+| 2026-11-13 | M0 | Client shell and tokens | Pass | Token utilities compiled and default palette cleared; headless Edge screenshots at 1280 px and in a 375 px frame show the header, canvas and card with no overflow |
+| 2026-11-13 | M0 | Unreachable and placeholder `MONGODB_URI` | Pass | Exit code 1 with a clear message; environment variables override `.env` |
+| 2026-11-13 | M0 | Credential scan of every log | Pass | No credentials or cluster hostnames in any output |
+| 2026-11-13 | M0 | Dev API against Atlas | **Blocked** | DNS and TCP 27017 OK; TLS rejected by all 3 servers (SSL alert 80), so this machine's IP isn't on the Atlas Network Access list |
 
 ## 13. Decisions (confirmed 2026-11-13)
 
@@ -405,6 +429,7 @@ Manual checks (M5–M7): two-browser conflict test (normal plus private window),
 | D10 | Only the dependencies below are allowed; anything else needs approval | Protects the 1–2 day scope |
 | D11 | Real screens show only real API data; previews are labelled (DESIGN.md §9) | An honest demo |
 | D12 | Members get 404, not 403, for another member's booking; admins can act on any booking | Doesn't reveal whether a booking id exists |
+| D13 | Toolchain pinned to Node 22.11-compatible majors: Vite 6.4, @vitejs/plugin-react 4.7, Vitest 4.1, React Router 7.18, TypeScript 5.9. The rest are current: React 19.3, Tailwind 4.3, Express 5.3, Mongoose 9.12, Zod 4.6, mongodb-memory-server 11.3 | The dev machine runs Node 22.11; newer majors need 22.12 or later (React Router 8 needs 22.22 or later). Bump after a Node update |
 
 **Dependency allowlist**
 - Client: `react`, `react-dom`, `react-router`, `tailwindcss`, `@tailwindcss/vite`. Dev: `vite`, `@vitejs/plugin-react`, `typescript`, and the ESLint packages from the Vite template.

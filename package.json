@@ -1,0 +1,20 @@
+{
+  "name": "slotbook",
+  "private": true,
+  "description": "SlotBook: booking for meeting rooms and shared equipment.",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "engines": {
+    "node": ">=22.11.0"
+  },
+  "scripts": {
+    "dev:server": "npm run dev --workspace server",
+    "dev:client": "npm run dev --workspace client",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces",
+    "start": "npm run start --workspace server"
+  }
+}
