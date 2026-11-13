@@ -1,6 +1,6 @@
 # SlotBook — Implementation Plan
 
-> **Status: Plan approved on 2026-11-13. M0 (foundation) is done and verified, including the live Atlas connection. M1 is next.** Every checklist item below stays unchecked until it is built **and** verified.
+> **Status: Plan approved on 2026-11-13. M0 (foundation) is done and verified, including the live Atlas connection. M1 (accounts and roles) is built and verified on an in-memory replica set; its last item, seeding the accounts in Atlas, waits for `JWT_SECRET` and `SEED_*` values in `.env`. M2 starts once that is confirmed.** Every checklist item below stays unchecked until it is built **and** verified.
 > UI rules live in [DESIGN.md](DESIGN.md); working rules for coding agents live in [CLAUDE.md](CLAUDE.md).
 
 ## 1. Goal and scope
@@ -119,7 +119,7 @@ Invariant (checked in tests): a confirmed booking has exactly one slot record pe
 
 ## 6. API
 
-JSON under `/api`. Authentication uses an httpOnly session cookie (§7). Every error has the shape `{ "error": { "code", "message", "details"? } }`.
+JSON under `/api`. Authentication uses an httpOnly session cookie (§7). Every error has the shape `{ "error": { "code", "message", "details"? } }`. A user is returned as `{ id, name, email, role }`, never with its password hash.
 
 | Method and path | Access | Purpose → success |
 |---|---|---|
@@ -152,13 +152,14 @@ Booking request: `{ "resourceId": "…", "slotStarts": ["2026-11-14T04:30:00.000
 
 | Status | Code | When |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | Invalid body or query; `details.fields` maps each field to a message |
+| 400 | `VALIDATION_ERROR` | Invalid body or query (`details.fields` maps each field to a message), or a body that isn't valid JSON |
 | 401 | `UNAUTHENTICATED`, `INVALID_CREDENTIALS` | Missing, invalid or expired session; wrong email or password |
 | 403 | `FORBIDDEN` | A member calling an admin-only endpoint |
-| 404 | `NOT_FOUND` | Unknown id; an inactive resource requested by a member; another member's booking (members get the same 404 as for an id that doesn't exist) |
+| 404 | `NOT_FOUND` | Unknown id or unknown `/api` path; an inactive resource requested by a member; another member's booking (members get the same 404 as for an id that doesn't exist) |
 | 409 | `EMAIL_TAKEN`, `NAME_TAKEN` | Duplicate account email or resource name |
 | 409 | `SLOT_UNAVAILABLE` | `details.slots: [{ start, reason: "booked" or "past" }]` |
 | 409 | `BOOKING_NOT_CANCELLABLE` | Already cancelled, or already started |
+| 500 | `INTERNAL_ERROR` | Any unexpected failure; the message is generic, and the details go to the server log only |
 
 ## 7. Authorization
 
@@ -171,10 +172,10 @@ Booking request: `{ "resourceId": "…", "slotStarts": ["2026-11-14T04:30:00.000
 | Cancel a booking before it starts | 401 | own (others → 404) | any |
 | Create, edit, deactivate or reactivate resources | 401 | 403 | ✓ |
 
-- **Session:** a JWT (HS256, `JWT_SECRET`, 7-day expiry) in an `httpOnly`, `SameSite=Lax` cookie that is `Secure` in production. Never stored in localStorage.
+- **Session:** a JWT (HS256, `JWT_SECRET`, 7-day expiry) in an `httpOnly`, `SameSite=Lax` cookie that is `Secure` in production. Never stored in localStorage. `JWT_SECRET` is required and at least 32 characters; the API won't start without it.
 - `requireAuth` verifies the token and **reloads the user on every request**, so role changes and deleted users take effect immediately. `requireAdmin` checks the role and returns 403 to members.
 - Ownership checks live in the booking service. When a member targets another member's booking, the API returns 404, exactly as for an id that doesn't exist, so booking ids can't be probed. Admins can act on any booking.
-- Registration ignores any `role` in the body. Passwords are hashed with bcrypt (cost 10) and must be 8–72 characters. Login errors don't reveal whether an email exists.
+- Registration ignores any `role` in the body. Passwords are hashed with bcrypt (cost 10) and must be 8–72 characters and at most 72 bytes in UTF-8, because bcrypt ignores everything after that. Login errors don't reveal whether an email exists.
 - Logout clears the cookie. Server-side token revocation is deferred (accepted risk).
 - Client route guards only shape the UI; the API is the authority.
 
@@ -252,31 +253,41 @@ Checklist
 Acceptance (results on 2026-11-13; details in the §12 log)
 - ✅ The client dev URL shows the placeholder shell on the `canvas` background with the SlotBook header (headless Edge screenshots at 1280 px wide and inside a 375 px frame).
 - ✅ `GET /api/health` through the client dev server returns 200 `{"status":"ok","db":"connected"}` against Atlas, and also against a local in-memory replica set.
-  - The first Atlas attempt failed during the TLS handshake (SSL alert 80). This network sends traffic from several public addresses, but the access list held only one.
-  - Allowing the network's address range in Atlas Network Access fixed it.
+  - The first Atlas attempt failed during the TLS handshake (SSL alert 80) although DNS and TCP worked. The most likely cause is the Network Access list: this network sends traffic from more than one public address, and the list held one. That is inferred, not proven. The address the port-27017 traffic used was never observed, and the list itself isn't visible from here.
+  - After the user changed the Network Access list, the API connected. A re-check in a new session connected 7 times out of 7 in fresh processes.
 - ✅ The guard test refuses a standalone MongoDB with the replica-set message. An unreachable `MONGODB_URI` makes the API exit with code 1 and "Could not connect to MongoDB …".
 - ✅ The typecheck, test (9/9) and build commands succeed and are written into CLAUDE.md.
 
 Notes
 - Versions are pinned to work with Node 22.11 (D13). ESLint is allowed but not added yet; the strict typecheck covers M0.
 - The API reads `MONGODB_URI` from the repo-root `.env`; the credentials are inside the URI. It also reads optional `MONGODB_DB_NAME` (default `slotbook`, since the URI names no database) and `PORT`. The other variables in `.env` aren't used.
-- Atlas Network Access must cover every public address the development network uses. A single "current IP" entry wasn't enough here.
+- If SSL alert 80 returns, check the Network Access list against the machine's current public addresses first. This network uses more than one, so a single "current IP" entry may not be enough.
 
-### M1: Accounts and roles (≈ 2.5 h). Status: not started
+### M1: Accounts and roles (≈ 2.5 h). Status: built and verified on an in-memory replica set (2026-11-13); seeding the accounts in Atlas is pending
 
 Checklist
-- [ ] User model; register, login, logout, me; bcrypt; JWT cookie
-- [ ] `requireAuth`, `requireAdmin`, Zod validation middleware, a central error handler that uses the error envelope
-- [ ] Seed script that creates an admin and a member from `SEED_*` env vars (idempotent)
-- [ ] Client: auth state from `/api/auth/me`; Sign in and Register pages; protected routes that return to the original page after sign-in; 401 → sign in; 403 and 404 pages; role-aware nav; sign out
-- [ ] API tests for the auth flow, the ignored `role` field and the 401s
+- [x] User model; register, login, logout, me; bcrypt; JWT cookie
+- [x] `requireAuth`, `requireAdmin`, Zod validation middleware, a central error handler that uses the error envelope
+- [x] Seed script that creates an admin and a member from `SEED_*` env vars (idempotent)
+- [x] Client: auth state from `/api/auth/me`; Sign in and Register pages; protected routes that return to the original page after sign-in; 401 → sign in; 403 and 404 pages; role-aware nav; sign out
+- [x] API tests for the auth flow, the ignored `role` field and the 401s
+- [ ] The seeded admin and member exist in the Atlas database. This needs `JWT_SECRET` and the `SEED_*` values in `.env` (the user supplies them), then `npm run seed`.
 
-Acceptance
-- A new visitor registers and lands on `/resources` as a member. Reloading keeps the session. Signing out returns to `/login`, after which `/api/auth/me` returns 401.
-- A wrong password shows "Email or password is incorrect."
-- Registering with `"role": "admin"` in the body creates a member (test).
-- The seeded admin sees "Manage resources" in the nav. A member doesn't, and opening `/admin/resources` shows the 403 page.
-- `document.cookie` in the browser console doesn't include the session cookie.
+Acceptance (results on 2026-11-13; details in the §12 log). Browser checks ran in headless Edge against the Vite dev client and the built API, with an in-memory replica set standing in for Atlas.
+- ✅ A new visitor registers and lands on `/resources` as a member. Reloading keeps the session. Signing out returns to `/login`, after which `/api/auth/me` returns 401.
+- ✅ A wrong password shows "Email or password is incorrect.", and focus moves to that message.
+- ✅ Registering with `"role": "admin"` in the body creates a member (API test, checked in the response and in the database).
+- ✅ The seeded admin sees "Manage resources" in the nav. A member doesn't, and opening `/admin/resources` shows the 403 page at the same address. The seeded accounts here came from `npm run seed` with throwaway values, not the real ones.
+- ✅ `document.cookie` in the browser console doesn't include the session cookie. The browser's cookie jar holds it as `httpOnly` with `SameSite=Lax`.
+
+Notes
+- **New environment variables.** `JWT_SECRET` is required (at least 32 characters), and the API refuses to start without it. The `SEED_*` variables are read only by `npm run seed`: `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_MEMBER_EMAIL`, `SEED_MEMBER_PASSWORD`, and optional `SEED_ADMIN_NAME` and `SEED_MEMBER_NAME` (defaults Admin and Member). `.env.example` holds placeholders only.
+- **Seed rules.** A missing account is created. An existing account keeps its name and password, and only its role is corrected, which is how someone who registered first becomes an admin (§3: roles change only through the seed or the database). Running it again changes nothing.
+- **Placeholder pages.** `/resources`, `/bookings` and `/admin/resources` are honest placeholders that say the feature isn't built. They exist so the nav, the guards and the 403 page can be verified. They show no sample data.
+- **Mid-session expiry.** Any 401 `UNAUTHENTICATED` from `apiFetch` ends the session and returns the user to `/login`, then back to the page they were on. A wrong password (401 `INVALID_CREDENTIALS`) doesn't trigger it. A deliberate sign-out doesn't bring the next sign-in back to the old page.
+- **Console and M7.** A signed-out first load makes the browser log the expected 401 from `/api/auth/me`. Scripts can't suppress that line, so M7's "no console errors" check has to allow it.
+- **Cookie and M8.** The cookie is `Secure` only when `NODE_ENV=production`, so the production deployment must be served over HTTPS.
+- **No client tests.** The UI was checked with scripted headless-Edge runs. They aren't kept in the repo, because end-to-end tests are deferred (§3).
 
 ### M2: Resource catalog and discovery (≈ 2 h). Status: not started
 
@@ -407,10 +418,23 @@ Manual checks (M5–M7): two-browser conflict test (normal plus private window),
 | 2026-11-13 | M0 | Client shell and tokens | Pass | Token utilities compiled and default palette cleared; headless Edge screenshots at 1280 px and in a 375 px frame show the header, canvas and card with no overflow |
 | 2026-11-13 | M0 | Unreachable and placeholder `MONGODB_URI` | Pass | Exit code 1 with a clear message; environment variables override `.env` |
 | 2026-11-13 | M0 | Credential scan of every log | Pass | No credentials or cluster hostnames in any output |
-| 2026-11-13 | M0 | Dev API against Atlas | **Blocked** | DNS and TCP 27017 OK; TLS rejected by all 3 servers (SSL alert 80). The access list didn't cover the address this traffic leaves from, because the network uses several public IPs |
-| 2026-11-13 | M0 | Dev API and Vite proxy against Atlas, after allowing the network's address range | Pass | `/api/health` 200 on :4000 and through :5173; replica set and transactions verified |
+| 2026-11-13 | M0 | Dev API against Atlas | **Blocked** | DNS and TCP 27017 OK; TLS rejected by all 3 servers (SSL alert 80). Most likely the Network Access list missed an address this network sends traffic from (inferred, not proven) |
+| 2026-11-13 | M0 | Dev API and Vite proxy against Atlas, after the user changed the Network Access list (the exact entry isn't known) | Pass | `/api/health` 200 on :4000 and through :5173; replica set and transactions verified |
+| 2026-11-13 | M0 | Atlas re-check in a new session: the API's own `connectDatabase` (connect, replica-set check, test transaction, index build) in a one-shot script, 7 fresh processes | Pass | 7/7, about 0.9 s each; no credentials or hostnames printed |
 | 2026-11-13 | M0 | `npm start` against Atlas | Pass | `/api/health` 200 on :4001 |
 | 2026-11-13 | M0 | Credential scan of the Atlas run logs | Pass | No credentials or cluster hostnames |
+| 2026-11-13 | M1 | `npm install` of `bcryptjs` 3.0.3, `jsonwebtoken` 9.0.3, `cookie-parser` 1.4.7 and the two `@types/*` packages | Pass | 0 vulnerabilities. Node engine ranges checked against 22.11 (bcryptjs declares none). `npm ls vite` shows the single version 6.4.6. `@types/bcryptjs` skipped: it's a deprecated stub, since bcryptjs ships its own types |
+| 2026-11-13 | M1 | `npm run typecheck` | Pass | Client and server |
+| 2026-11-13 | M1 | `npm test` | Pass | 57 tests in 5 files: auth 38 (register, login, me, logout, `requireAdmin`, error envelope), seed 7, config 8, health 2, guard 2 |
+| 2026-11-13 | M1 | Mutation checks on the new tests | Pass | Dropping the unique email index fails 2 tests; letting `role` through registration fails 1; restoring the old body-parser error mapping fails 2. Each change was reverted afterwards and the suite re-run green |
+| 2026-11-13 | M1 | `npm run build` | Pass | `client/dist` (CSS 17.24 kB, JS 336.95 kB) and `server/dist` |
+| 2026-11-13 | M1 | `npm run seed` against an in-memory replica set, throwaway `SEED_*` values | Pass | With no `SEED_*`: exit 1, names the missing variables, prints no values. First run: admin and member created. Second run: both unchanged |
+| 2026-11-13 | M1 | Browser acceptance script: headless Edge, Vite dev client plus built API, in-memory replica set | Pass | 49/49 checks, run on the final build: register, land on `/resources`, reload, sign out, `me` 401, wrong password, 403 and 404 pages, return to the original page, seeded admin and member nav, `httpOnly` cookie absent from `document.cookie`, focus and titles, skip link, 375 px menu with 44 px targets, Esc and Back close the menu. Only the expected 401 responses and one deliberate 409 reached the console |
+| 2026-11-13 | M1 | Mid-session expiry: cookie removed, then the app's own `apiFetch` called from the page | Pass | 6/6: the 401 `UNAUTHENTICATED` sends the user to `/login`, sign-in returns to the page they were on, and a wrong password isn't treated as expiry |
+| 2026-11-13 | M1 | Built API booted against Atlas, throwaway `JWT_SECRET` passed in the environment only | Pass | Without `JWT_SECRET`: exit 1, message names the variable only. With it: replica set and transactions verified, `/api/health` 200, `/api/auth/me` 401, unknown API path 404 in the envelope. Startup builds the `users` indexes, which created the empty `users` collection and its unique email index in the Atlas `slotbook` database. No user was created |
+| 2026-11-13 | M1 | Independent code review (medium) | Done | 10 findings. 4 fixed: body-parser 4xx errors now return 400 instead of 500; the seed shares the env parser; a regression test for the unique email index; the client email-check comment. 1 resolved by this documentation update. 5 declined as not applicable or out of scope: login-password length cap, seed find-then-create race, `Secure` cookie over plain HTTP (an M8 concern), `signOut` rejection (the caller already catches it), a DB error in `requireAuth` giving 500 |
+| 2026-11-13 | M1 | Credential scan of the full working-tree diff against the values in `.env` and `atlas-credentials.env` | Pass | No value found; no Atlas hostnames in the diff |
+| not run | M1 | Seeded admin and member in Atlas, signing in against Atlas | **Pending** | Needs the user's `JWT_SECRET` and `SEED_*` values in `.env`, then `npm run seed` |
 
 ## 13. Decisions (confirmed 2026-11-13)
 

@@ -16,7 +16,8 @@ async function main(): Promise<void> {
   await connectDatabase({ uri: config.MONGODB_URI, dbName: config.MONGODB_DB_NAME });
   console.log(`MongoDB connected: database "${config.MONGODB_DB_NAME}", replica set and transactions verified`);
 
-  const server = createApp().listen(config.PORT, (error?: Error) => {
+  const app = createApp({ jwtSecret: config.JWT_SECRET, secureCookies: config.NODE_ENV === 'production' });
+  const server = app.listen(config.PORT, (error?: Error) => {
     if (error) fail(error);
     console.log(`SlotBook API listening on http://localhost:${config.PORT}`);
   });

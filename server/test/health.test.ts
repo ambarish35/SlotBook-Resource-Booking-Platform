@@ -3,9 +3,10 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import { connectDatabase, disconnectDatabase } from '../src/db.js';
+import { TEST_SESSION } from './helpers.js';
 
 describe('GET /api/health', () => {
-  const app = createApp();
+  const app = createApp(TEST_SESSION);
   let replSet: MongoMemoryReplSet | undefined;
 
   beforeAll(async () => {

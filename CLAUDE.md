@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-SlotBook is a MERN app for booking meeting rooms and shared equipment within one organization. **Status: M0 (foundation) is done and verified. M1 (accounts and roles) is next.**
+SlotBook is a MERN app for booking meeting rooms and shared equipment within one organization. **Status: M0 (foundation) is done and verified. M1 (accounts and roles) is built and verified on an in-memory replica set; seeding the accounts in Atlas waits for `JWT_SECRET` and `SEED_*` values in `.env`. M2 starts once that is confirmed.**
 
 ## Before implementing
 
@@ -19,7 +19,7 @@ SlotBook is a MERN app for booking meeting rooms and shared equipment within one
 
 ## Commands
 
-Run these from the repo root. Each one ran successfully during M0 (2026-11-13).
+Run these from the repo root. Each one ran successfully on 2026-11-13 (M0 and M1). `npm run seed` has so far run only against an in-memory replica set.
 
 | Command | What it does |
 |---|---|
@@ -30,13 +30,15 @@ Run these from the repo root. Each one ran successfully during M0 (2026-11-13).
 | `npm test` | Server tests (Vitest + Supertest on an in-memory MongoDB replica set) |
 | `npm run build` | Builds `client/dist` and `server/dist` |
 | `npm start` | Runs the built API from `server/dist` |
+| `npm run seed` | Creates the admin and member accounts from the `SEED_*` variables; safe to run again (see PLAN.md §11, M1 notes) |
 
-Development needs two terminals, one for `npm run dev:server` and one for `npm run dev:client`. A seed command arrives in M1.
+Development needs two terminals, one for `npm run dev:server` and one for `npm run dev:client`. The API won't start until `JWT_SECRET` is set in `.env`.
 
 ## Environment
 
 - Node.js 22.11 on the dev machine. Dependencies are pinned to majors that support it (PLAN.md D13).
-- `.env` lives at the repo root. The API reads `MONGODB_URI` (credentials inside), plus optional `MONGODB_DB_NAME` (default `slotbook`) and `PORT` (default 4000). Real environment variables override `.env`.
-- MongoDB must be a replica set because bookings use transactions; the API refuses to start otherwise. Atlas only accepts IP addresses on the project's Network Access list. The development network uses several public IPs, so the list needs the network's address range, not a single IP. Tests use the replica set from `mongodb-memory-server`.
+- `.env` lives at the repo root. The API reads `MONGODB_URI` (credentials inside) and `JWT_SECRET` (required, at least 32 characters), plus optional `MONGODB_DB_NAME` (default `slotbook`) and `PORT` (default 4000). `npm run seed` reads `MONGODB_URI` and the `SEED_*` variables listed in `.env.example`, but not `JWT_SECRET`. Real environment variables override `.env`.
+- MongoDB must be a replica set because bookings use transactions; the API refuses to start otherwise. Atlas only accepts IP addresses on the project's Network Access list. If the connection fails with a TLS "SSL alert 80" while DNS and TCP work, suspect that list first: this network uses more than one public IP (suspected cause of the earlier failure, not proven), so a single "current IP" entry may not be enough. Tests use the replica set from `mongodb-memory-server`.
+- Never write real secret values (`JWT_SECRET`, `SEED_*` passwords, the connection string) into files or commands yourself; the user puts them in `.env`. For a local check, pass throwaway values through the process environment only.
 - Business times are IST and storage is UTC (PLAN.md §10).
 - Secrets live in `.env` and other `*.env` files, which git ignores. Keep `.env.example` current, with placeholders only.
