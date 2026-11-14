@@ -1,28 +1,17 @@
-# SlotBook — Session handoff (2026-11-13, after M1)
+# SlotBook — Session handoff (after M1 verification)
 
 Read [CLAUDE.md](CLAUDE.md), [PLAN.md](PLAN.md) and [DESIGN.md](DESIGN.md) first. This file only adds session context; if it ever disagrees with PLAN.md, PLAN.md wins.
 
 ## State
 
 - **Branch:** `main`.
-- **Pushed:** `8fbebc3` ("docs: add session handoff"); `origin/main` pointed there at the last local check. The M1 commit sits on top of it (`git log -1`) and has **not** been pushed. The user does the pushing.
-- **Working tree:** clean after the M1 commit, apart from ignored local files (`.env`, other `*.env` files, `node_modules/`, `dist/`).
-- **Milestones:**
-  - M0 is done and verified.
-  - M1 is built and verified on an in-memory replica set. One checklist item is still open: the accounts aren't seeded in Atlas yet, because that needs values only the user can supply (below).
-  - M2 hasn't started. Begin it only when the user asks, and once M1's Atlas step is confirmed.
+- **Pushed:** `8fbebc3` ("docs: add session handoff") was the last pushed commit at the last local check. Later commits aren't pushed; the user does the pushing.
+- **Working tree:** clean after each commit, apart from ignored local files (`.env`, other `*.env` files, `node_modules/`, `dist/`).
+- **Milestones:** M0 and M1 are done and verified. The user seeded the accounts in Atlas, and the agent re-checked them (PLAN.md §12, 2026-11-15). M2 is next.
 
-## What the user needs to do next
+## Environment (already set up)
 
-1. Add these to the repo-root `.env`. Never paste the values into chat, commits or commands:
-   - `JWT_SECRET`: generate one with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
-   - `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_MEMBER_EMAIL`, `SEED_MEMBER_PASSWORD` (passwords 8–72 characters). Optional: `SEED_ADMIN_NAME`, `SEED_MEMBER_NAME`.
-2. Run `npm run seed`. Expect `Seeded users: admin created, member created`. It is safe to run again.
-3. Run `npm run dev:server` and `npm run dev:client`, then sign in as each account. Then tick the last M1 item in PLAN.md §11 and log the run in §12.
-
-Until `JWT_SECRET` is set, `npm run dev:server` and `npm start` exit with `JWT_SECRET is required`. That is intended.
-
-Side effect to know about: booting the M1 API against Atlas builds the `users` indexes, so the Atlas `slotbook` database now holds an empty `users` collection with a unique email index. No user was created there.
+The user's `.env` holds `MONGODB_URI`, `JWT_SECRET` and the four required `SEED_*` variables. The API needs `JWT_SECRET` to start. Atlas holds exactly two users, the seeded admin and member. Only variable names were ever inspected; never print the values.
 
 ## What M0 implements
 
@@ -73,7 +62,7 @@ PLAN.md §12 has the full log with details. In short:
 | Mid-session expiry in the browser | 6/6 |
 | Built API booted against Atlas | Replica set and transactions verified; health 200; `me` 401 |
 | Credential scan of the diff | Clean |
-| Seeded accounts in Atlas, signing in against Atlas | **Not run** (needs the user's `.env` values) |
+| Atlas `users` collection and sign-in through the real app (2026-11-15) | Pass: 2 users (admin, member), bcrypt hashes, unique index; login and `me` 200 for both; wrong password 401 |
 
 ## Atlas connection
 
@@ -134,4 +123,4 @@ git diff --staged | node -e "const{parseEnv}=require('node:util');const e=parseE
 
 ## Next milestone: M2, resource catalog and discovery
 
-The full checklist is in PLAN.md §11. Start it only when asked, after M1's Atlas seed is confirmed. It adds the Resource model and indexes, about 8 demo resources in the seed, `GET /api/resources` and `GET /api/resources/:id`, the discovery page with search and filters, the resource detail header, and API tests. It is the first milestone where pages call the API after sign-in, so the mid-session 401 handling will run for real.
+The full checklist is in PLAN.md §11. It adds the Resource model and indexes, about 8 demo resources in the seed, `GET /api/resources` and `GET /api/resources/:id`, the discovery page with search and filters, the resource detail header, and API tests. It is the first milestone where pages call the API after sign-in, so the mid-session 401 handling will run for real.

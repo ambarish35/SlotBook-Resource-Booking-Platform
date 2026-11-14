@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-SlotBook is a MERN app for booking meeting rooms and shared equipment within one organization. **Status: M0 (foundation) is done and verified. M1 (accounts and roles) is built and verified on an in-memory replica set; seeding the accounts in Atlas waits for `JWT_SECRET` and `SEED_*` values in `.env`. M2 starts once that is confirmed.**
+SlotBook is a MERN app for booking meeting rooms and shared equipment within one organization. **Status: M0 (foundation) and M1 (accounts and roles) are done and verified. M2 (resource catalog and discovery) is next.**
 
 ## Before implementing
 
@@ -19,7 +19,7 @@ SlotBook is a MERN app for booking meeting rooms and shared equipment within one
 
 ## Commands
 
-Run these from the repo root. Each one ran successfully on 2026-11-13 (M0 and M1). `npm run seed` has so far run only against an in-memory replica set.
+Run these from the repo root. Each one ran successfully (M0 and M1, 2026-11-13 to 2026-11-15), and `npm run seed` has run against both an in-memory replica set and Atlas.
 
 | Command | What it does |
 |---|---|

@@ -1,6 +1,6 @@
 # SlotBook — Implementation Plan
 
-> **Status: Plan approved on 2026-11-13. M0 (foundation) is done and verified, including the live Atlas connection. M1 (accounts and roles) is built and verified on an in-memory replica set; its last item, seeding the accounts in Atlas, waits for `JWT_SECRET` and `SEED_*` values in `.env`. M2 starts once that is confirmed.** Every checklist item below stays unchecked until it is built **and** verified.
+> **Status: Plan approved on 2026-11-13. M0 (foundation) is done and verified, including the live Atlas connection. M1 (accounts and roles) is done and verified, including the seeded accounts in Atlas. M2 is next.** Every checklist item below stays unchecked until it is built **and** verified.
 > UI rules live in [DESIGN.md](DESIGN.md); working rules for coding agents live in [CLAUDE.md](CLAUDE.md).
 
 ## 1. Goal and scope
@@ -263,7 +263,7 @@ Notes
 - The API reads `MONGODB_URI` from the repo-root `.env`; the credentials are inside the URI. It also reads optional `MONGODB_DB_NAME` (default `slotbook`, since the URI names no database) and `PORT`. The other variables in `.env` aren't used.
 - If SSL alert 80 returns, check the Network Access list against the machine's current public addresses first. This network uses more than one, so a single "current IP" entry may not be enough.
 
-### M1: Accounts and roles (≈ 2.5 h). Status: built and verified on an in-memory replica set (2026-11-13); seeding the accounts in Atlas is pending
+### M1: Accounts and roles (≈ 2.5 h). Status: done (built and verified 2026-11-13; accounts seeded and checked in Atlas 2026-11-15)
 
 Checklist
 - [x] User model; register, login, logout, me; bcrypt; JWT cookie
@@ -271,13 +271,13 @@ Checklist
 - [x] Seed script that creates an admin and a member from `SEED_*` env vars (idempotent)
 - [x] Client: auth state from `/api/auth/me`; Sign in and Register pages; protected routes that return to the original page after sign-in; 401 → sign in; 403 and 404 pages; role-aware nav; sign out
 - [x] API tests for the auth flow, the ignored `role` field and the 401s
-- [ ] The seeded admin and member exist in the Atlas database. This needs `JWT_SECRET` and the `SEED_*` values in `.env` (the user supplies them), then `npm run seed`.
+- [x] The seeded admin and member exist in the Atlas database. The user put `JWT_SECRET` and the `SEED_*` values in `.env` and ran `npm run seed`; the accounts were then checked read-only and through sign-in (§12, 2026-11-15).
 
 Acceptance (results on 2026-11-13; details in the §12 log). Browser checks ran in headless Edge against the Vite dev client and the built API, with an in-memory replica set standing in for Atlas.
 - ✅ A new visitor registers and lands on `/resources` as a member. Reloading keeps the session. Signing out returns to `/login`, after which `/api/auth/me` returns 401.
 - ✅ A wrong password shows "Email or password is incorrect.", and focus moves to that message.
 - ✅ Registering with `"role": "admin"` in the body creates a member (API test, checked in the response and in the database).
-- ✅ The seeded admin sees "Manage resources" in the nav. A member doesn't, and opening `/admin/resources` shows the 403 page at the same address. The seeded accounts here came from `npm run seed` with throwaway values, not the real ones.
+- ✅ The seeded admin sees "Manage resources" in the nav. A member doesn't, and opening `/admin/resources` shows the 403 page at the same address. In the scripted browser run the seeded accounts came from `npm run seed` with throwaway values; the real seeded accounts were checked in Atlas through sign-in (§12, 2026-11-15) and by the user in a browser.
 - ✅ `document.cookie` in the browser console doesn't include the session cookie. The browser's cookie jar holds it as `httpOnly` with `SameSite=Lax`.
 
 Notes
@@ -434,7 +434,9 @@ Manual checks (M5–M7): two-browser conflict test (normal plus private window),
 | 2026-11-13 | M1 | Built API booted against Atlas, throwaway `JWT_SECRET` passed in the environment only | Pass | Without `JWT_SECRET`: exit 1, message names the variable only. With it: replica set and transactions verified, `/api/health` 200, `/api/auth/me` 401, unknown API path 404 in the envelope. Startup builds the `users` indexes, which created the empty `users` collection and its unique email index in the Atlas `slotbook` database. No user was created |
 | 2026-11-13 | M1 | Independent code review (medium) | Done | 10 findings. 4 fixed: body-parser 4xx errors now return 400 instead of 500; the seed shares the env parser; a regression test for the unique email index; the client email-check comment. 1 resolved by this documentation update. 5 declined as not applicable or out of scope: login-password length cap, seed find-then-create race, `Secure` cookie over plain HTTP (an M8 concern), `signOut` rejection (the caller already catches it), a DB error in `requireAuth` giving 500 |
 | 2026-11-13 | M1 | Credential scan of the full working-tree diff against the values in `.env` and `atlas-credentials.env` | Pass | No value found; no Atlas hostnames in the diff |
-| not run | M1 | Seeded admin and member in Atlas, signing in against Atlas | **Pending** | Needs the user's `JWT_SECRET` and `SEED_*` values in `.env`, then `npm run seed` |
+| 2026-11-15 | M1 | Read-only check of the Atlas `users` collection after the user ran `npm run seed` | Pass | 2 users (1 admin, 1 member); both emails match the `SEED_*` variables; password hashes are bcrypt cost 10; the unique email index is present. Only counts and booleans were printed |
+| 2026-11-15 | M1 | Sign-in against Atlas through the real app (in-process server on an ephemeral port); credentials read from `.env` in memory only | Pass | Admin: login 200, role `admin`, `me` 200. Member: login 200, role `member`, `me` 200. Cookie `httpOnly` and `SameSite=Lax`. A wrong password gives 401 `INVALID_CREDENTIALS` |
+| 2026-11-15 | M1 | Browser sign-in as the seeded admin and member against Atlas | Pass (reported by the user; not re-run by the agent) | The user ran `npm run seed` and signed in as both accounts |
 
 ## 13. Decisions (confirmed 2026-11-13)
 
