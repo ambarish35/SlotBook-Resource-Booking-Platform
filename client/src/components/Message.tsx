@@ -1,5 +1,6 @@
 import type { ComponentPropsWithRef, ReactNode } from 'react';
-import { CheckIcon, ErrorIcon, InfoIcon, WarningIcon } from './icons';
+import { CheckIcon, CloseIcon, ErrorIcon, InfoIcon, WarningIcon } from './icons';
+import { IconButton } from './IconButton';
 
 export type MessageVariant = 'info' | 'success' | 'warning' | 'danger';
 
@@ -18,13 +19,18 @@ type MessageProps = Omit<ComponentPropsWithRef<'div'>, 'title' | 'className'> & 
   /** What happened and what to do next. */
   children?: ReactNode;
   action?: ReactNode;
+  /**
+   * Adds a "Dismiss message" button. DESIGN.md §4: success messages can be dismissed; errors and warnings
+   * stay until the problem is resolved. The caller removes the message and decides where focus goes.
+   */
+  onDismiss?: () => void;
 };
 
 /**
  * A persistent inline section message (DESIGN.md §4). It is focusable (tabIndex -1) so that, after
  * the user's own action, focus can move to it. Pass role="alert" for a failed page load.
  */
-export function Message({ variant, title, children, action, ...props }: MessageProps) {
+export function Message({ variant, title, children, action, onDismiss, ...props }: MessageProps) {
   const { box, icon, Icon } = variants[variant];
   return (
     <div tabIndex={-1} className={`flex gap-3 rounded-lg border p-4 ${box}`} {...props}>
@@ -34,6 +40,12 @@ export function Message({ variant, title, children, action, ...props }: MessageP
         {children ? <div className="mt-1 text-copy-14 text-fg">{children}</div> : null}
         {action ? <div className="mt-3">{action}</div> : null}
       </div>
+      {onDismiss ? (
+        // Pulled into the padding so the 40-44 px target doesn't make the message taller.
+        <IconButton label="Dismiss message" onClick={onDismiss} className="-mt-2.5 -mr-2.5 -mb-2.5 self-start">
+          <CloseIcon size={16} />
+        </IconButton>
+      ) : null}
     </div>
   );
 }

@@ -4,7 +4,12 @@ import { type HydratedDocument, type InferSchemaType, Schema, model } from 'mong
 export const RESOURCE_TYPES = ['room', 'equipment'] as const;
 export type ResourceType = (typeof RESOURCE_TYPES)[number];
 
+/** Field limits (PLAN.md §5). The API schemas in schemas/resources.ts use the same numbers. */
+export const MAX_NAME_LENGTH = 80;
+export const MAX_LOCATION_LENGTH = 120;
+export const MAX_DESCRIPTION_LENGTH = 500;
 export const MAX_TAGS = 10;
+export const MAX_TAG_LENGTH = 30;
 
 /** Resource names are unique ignoring case, and sorted ignoring case (PLAN.md §5). */
 export const NAME_COLLATION = { locale: 'en', strength: 2 } as const;
@@ -23,14 +28,14 @@ export interface PublicResource {
 
 const resourceSchema = new Schema(
   {
-    name: { type: String, required: true, trim: true, minlength: 1, maxlength: 80 },
+    name: { type: String, required: true, trim: true, minlength: 1, maxlength: MAX_NAME_LENGTH },
     type: { type: String, enum: RESOURCE_TYPES, required: true },
-    location: { type: String, required: true, trim: true },
+    location: { type: String, required: true, trim: true, maxlength: MAX_LOCATION_LENGTH },
     // Rooms: a whole number of 1 or more. Equipment: always null. Enforced in the validate hook below.
     capacity: { type: Number, default: null },
-    description: { type: String, trim: true, maxlength: 500, default: '' },
+    description: { type: String, trim: true, maxlength: MAX_DESCRIPTION_LENGTH, default: '' },
     tags: {
-      type: [{ type: String, trim: true, minlength: 1, maxlength: 30 }],
+      type: [{ type: String, trim: true, minlength: 1, maxlength: MAX_TAG_LENGTH }],
       default: [],
       validate: { validator: (tags: string[]) => tags.length <= MAX_TAGS, message: `Use at most ${MAX_TAGS} tags` },
     },

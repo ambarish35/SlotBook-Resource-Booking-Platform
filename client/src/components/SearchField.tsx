@@ -6,17 +6,27 @@ interface SearchFieldProps {
   value: string;
   onChange: (value: string) => void;
   inputRef: RefObject<HTMLInputElement | null>;
+  /** The visible label. Default: "Search resources". */
+  label?: string;
+  /** The persistent caption below the field. Default: "By name, location or tag". */
+  caption?: string;
 }
 
 /** A labelled `type="search"` field. Its clear button exists only while there is text (DESIGN.md §4 Inputs). */
-export function SearchField({ value, onChange, inputRef }: SearchFieldProps) {
+export function SearchField({
+  value,
+  onChange,
+  inputRef,
+  label = 'Search resources',
+  caption = 'By name, location or tag',
+}: SearchFieldProps) {
   const id = useId();
   const captionId = `${id}-caption`;
 
   return (
     <div>
       <label htmlFor={id} className="mb-1 block text-label-14 text-fg">
-        Search resources
+        {label}
       </label>
       <div className="relative">
         <input
@@ -43,7 +53,7 @@ export function SearchField({ value, onChange, inputRef }: SearchFieldProps) {
         ) : null}
       </div>
       <p id={captionId} className="mt-1 text-label-13 text-fg-muted">
-        By name, location or tag
+        {caption}
       </p>
     </div>
   );

@@ -2,9 +2,15 @@ import type { ComponentPropsWithRef } from 'react';
 import { Spinner } from './Spinner';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'subtle' | 'danger';
+/** `compact` is the 32 px button for table rows on desktop (DESIGN.md §3 Sizes); it is still 44 px high on touch screens. */
+export type ButtonSize = 'default' | 'compact';
 
-const base =
-  'inline-flex h-11 items-center justify-center gap-2 rounded-md px-4 text-label-14 whitespace-nowrap md:h-10';
+const base = 'inline-flex items-center justify-center gap-2 rounded-md text-label-14 whitespace-nowrap';
+
+const sizes: Record<ButtonSize, string> = {
+  default: 'h-11 px-4 md:h-10',
+  compact: 'h-11 px-3 md:h-8',
+};
 
 const variants: Record<ButtonVariant, string> = {
   primary: 'bg-accent text-white hover:bg-accent-hover active:bg-accent-active',
@@ -14,12 +20,13 @@ const variants: Record<ButtonVariant, string> = {
 };
 
 /** Class names for a button, so a `<Link>` that navigates can look like one (links navigate, buttons act). */
-export function buttonClasses(variant: ButtonVariant = 'primary', fullWidth = false): string {
-  return `${base} ${variants[variant]}${fullWidth ? ' w-full' : ''}`;
+export function buttonClasses(variant: ButtonVariant = 'primary', fullWidth = false, size: ButtonSize = 'default'): string {
+  return `${base} ${sizes[size]} ${variants[variant]}${fullWidth ? ' w-full' : ''}`;
 }
 
 type ButtonProps = ComponentPropsWithRef<'button'> & {
   variant?: ButtonVariant;
+  size?: ButtonSize;
   fullWidth?: boolean;
   /** Shows a spinner and `loadingLabel`, ignores clicks and sets aria-disabled. The button is never `disabled`. */
   loading?: boolean;
@@ -28,6 +35,7 @@ type ButtonProps = ComponentPropsWithRef<'button'> & {
 
 export function Button({
   variant = 'primary',
+  size = 'default',
   fullWidth = false,
   loading = false,
   loadingLabel,
@@ -48,7 +56,7 @@ export function Button({
         }
         onClick?.(event);
       }}
-      className={`${buttonClasses(variant, fullWidth)}${className ? ` ${className}` : ''}`}
+      className={`${buttonClasses(variant, fullWidth, size)}${className ? ` ${className}` : ''}`}
       {...props}
     >
       {loading ? (

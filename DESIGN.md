@@ -1,6 +1,6 @@
 # SlotBook — Design
 
-> **Status: partly built.** This is the design spec for the MVP in [PLAN.md](PLAN.md). Built so far: the tokens, the app shell, sign in and register (M0–M1), and resource discovery and the resource detail header (M2). Everything else here is still to be built.
+> **Status: partly built.** This is the design spec for the MVP in [PLAN.md](PLAN.md). Built so far: the tokens, the app shell, sign in and register (M0–M1), resource discovery and the resource detail header (M2), and Manage resources (M3). Everything else here is still to be built.
 
 ## 1. References
 
@@ -140,7 +140,7 @@ Neutral means a `surface-subtle` background with `fg-secondary` text. Badges are
 
 - Use the native `<dialog>` opened with `showModal()`. Only one dialog is open at a time, and no dialog opens another.
 - **Anatomy:** a header (`h2` title and a Close icon button), a short body, and a right-aligned footer (secondary, then primary).
-- **Width:** 480 px for confirmations, 640 px for forms. Below 640 px (768 px for the discovery filters) a dialog becomes a full-width bottom sheet with radius `xl` on its top corners, at most 90% of the viewport height, a scrolling body and a sticky footer.
+- **Width:** 480 px for confirmations, 640 px for forms. Below 640 px (768 px for the discovery filters and the Manage resources form) a dialog becomes a full-width bottom sheet with radius `xl` on its top corners, at most 90% of the viewport height, a scrolling body and a sticky footer. A form fills the whole screen instead, with square corners (§5.8).
 - **Focus:**
   - On open, focus moves to the first field. In a text-only confirmation it moves to the title (`tabindex="-1"`). It never starts on a destructive button.
   - On close, focus returns to the trigger, unless a result message appears; then focus moves to the message.
@@ -157,6 +157,7 @@ Neutral means a `surface-subtle` background with `fg-secondary` text. Badges are
   - Times are tabular, and actions are right-aligned.
 - **Markup:** a semantic `<table>` with a `<caption>` (it may be visually hidden), `<th scope="col">` headers, and the resource name as `<th scope="row">`.
 - Row actions keep their visible text first and add context for screen readers. For example, visible "Cancel" followed by hidden " booking: Room A, Sat 14 Nov, 10:00–11:00 IST".
+- **Fitting at 768 px:** a table with many columns (Manage resources has seven) uses tighter cell padding at 768–1023 px and stacks its row actions, so it fits without scrolling. The card around it scrolls sideways only as a last resort, for text with no spaces, and it contains the screen-reader-only text so that never widens the page.
 - The MVP has no sorting or pagination. Upcoming lists show the soonest first and history the newest first, limited to the latest 50 rows with the note "Showing the latest 50".
 
 ### Messages (section messages)
@@ -164,7 +165,7 @@ Neutral means a `surface-subtle` background with `fg-secondary` text. Badges are
 - Persistent inline messages at the top of the region they relate to: an icon, a title (`label-14` semibold), one or two sentences, and an optional action.
 - The variants are info, success, warning and danger. Each has its own icon shape (circle-i, check, triangle, octagon), so color isn't the only cue.
 - **Writing:** the title names the situation. The description says what happened and what to do next, so there are no dead ends. When the system is at fault, say so ("We couldn't load…").
-- **Persistence:** success messages can be dismissed. Errors and warnings stay until the problem is resolved.
+- **Persistence:** success messages can be dismissed, with a "Dismiss message" icon button; the message then goes and focus moves to the page heading. Errors and warnings stay until the problem is resolved.
 - **No toasts.**
 
 ### Other parts
@@ -227,7 +228,7 @@ Find a resource
   - Minimum capacity offers Any, then 2, 4, 6, 8, 12 and 20 "or more". It applies to rooms only, because equipment has no capacity: with Type set to All, choosing a capacity hides equipment, and a caption says so. Choosing Equipment clears the capacity.
   - "Clear filters" resets the type and capacity and also clears the search text, so it restores the full list.
   - The "Filters" button's count covers only the type and capacity, not the search text. Below 768 px the filters open as a bottom sheet (the generic dialog does so below 640 px).
-  - An empty catalog shows only its empty state, with no search or filters. For an admin its "Add resource" action links to Manage resources, where adding arrives in M3.
+  - An empty catalog shows only its empty state, with no search or filters. For an admin its "Add resource" action links to Manage resources, where the resource is added (§5.8).
   - Focus: from the no-results state, "Clear filters" moves focus to the search field. After "Try again" succeeds, focus moves to the search field; if it fails again, focus moves to the error message.
 
 ### 5.4 Resource detail (`/resources/:id`)
@@ -323,6 +324,17 @@ If even one selected slot is unavailable, the server rejects the whole booking a
 - After a save, deactivation or reactivation, a success message appears at the top with focus, and the row updates.
 - **Mobile:** cards showing name, tags, metadata and status, with full-width "Edit" and "Deactivate" buttons. The form opens as a full-screen sheet with a sticky footer.
 - **States:** loading; empty ("No resources yet" with "Add resource"); no matches ("No resources match" with "Clear filters"); error.
+- **Settled while building M3:**
+  - **List and views.** The page loads every resource with `GET /api/resources?status=all`. The status links are real links (`?status=active`, `?status=inactive`, none for All), and with no parameter the view is **All**, so a deactivated row stays in place and turns Inactive, as "the row updates" says. Search covers the name and the location (not tags). Type is a select (All types, Rooms, Equipment). A count in a `role="status"` line reads "8 resources". "Clear filters" resets the search, the type and the status.
+  - **Only one "Add resource".** It is in the page header once the list has loaded and has at least one resource. With no resources it is the empty state's action instead, and while loading or after an error there is none.
+  - **Rows.** Each row's buttons read "Edit Room A", "Deactivate Room A" and "Reactivate Room A": the visible word first, then the name for screen readers. Equipment shows "—" for capacity, with "No capacity" for screen readers. Row actions are 32 px high on desktop; on mobile they are full-width 44 px buttons in the card.
+  - **Form fields.** Name, Type (Room or Equipment radios, Room first), Location (caption "For example, Block A, 2nd floor"), Capacity (shown only for rooms: a text field with a numeric keypad, caption "Seats, a whole number of 1 or more"), "Description (optional)" and "Tags (optional)". Choosing Equipment hides Capacity, and the server stores none. Tags are split on commas, trimmed, and repeats (ignoring case) are dropped. Limits: name 80, location 120, description 500, 10 tags of 30 characters.
+  - **Checking.** The form checks itself on submit, with every problem shown at once and focus on the first, and again on blur after the first try. The server checks too: a 400 puts each message on its field, a taken name (409) puts "A resource with this name already exists." on the Name field, and any other failure shows "We couldn't save this resource" inside the dialog with focus on it, saying nothing was added or changed.
+  - **Edit sends only what changed.** Saving the Edit form sends just the fields that differ from the resource as it was when the dialog opened, so it can't undo another admin's edit of a field this admin left alone. With no change the dialog stays open and an info message, "No changes to save", takes focus.
+  - **While saving.** The submit button reads "Adding…" or "Saving…". Close, Cancel, Esc and a click on the backdrop do nothing until the server answers, and a second submit is ignored. Reopening a dialog always starts fresh.
+  - **After a result.** The dialog closes and a success message is focused at the top: "Room 204 added", "Changes to Room 204 saved", "Room 204 deactivated" or "Room 204 reactivated". When the current search, type or status would hide the changed row, the message says so and tells the admin to clear the filters. A failed reactivation shows a danger message there that stays until the next try.
+  - **Deactivate.** The dialog opens with focus on its title, not on a button. "Keep active" closes it and focus returns to the "Deactivate" button that opened it. A failure appears inside the dialog.
+  - **Breakpoint.** The table shows from 768 px, cards below. The form is a centered 640 px dialog from 768 px and a full-screen sheet below it (square corners, a sticky footer, the body scrolls), so it follows the page's own mobile breakpoint rather than the generic 640 px one.
 
 ## 6. Slot states
 

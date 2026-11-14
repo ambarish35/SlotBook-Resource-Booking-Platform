@@ -1,6 +1,6 @@
 # SlotBook — Implementation Plan
 
-> **Status: Plan approved on 2026-11-13. M0 (foundation) is done and verified, including the live Atlas connection. M1 (accounts and roles) is done and verified, including the seeded accounts in Atlas. M2 (resource catalog and discovery) is done and verified, including its demo data in Atlas. M3 is next.** Every checklist item below stays unchecked until it is built **and** verified.
+> **Status: Plan approved on 2026-11-13. M0 (foundation) is done and verified, including the live Atlas connection. M1 (accounts and roles) is done and verified, including the seeded accounts in Atlas. M2 (resource catalog and discovery) is done and verified, including its demo data in Atlas. M3 (admin resource management) is done and verified on an in-memory replica set; it adds no collection or index, and Atlas wasn't touched. M4 is next.** Every checklist item below stays unchecked until it is built **and** verified.
 > UI rules live in [DESIGN.md](DESIGN.md); working rules for coding agents live in [CLAUDE.md](CLAUDE.md).
 
 ## 1. Goal and scope
@@ -82,7 +82,7 @@ Indexes: `{ email: 1 }` unique.
 |---|---|---|
 | name | string | required, 1–80 chars |
 | type | `room` or `equipment` | required; an equipment resource is one individual item |
-| location | string | required, e.g. "Block A, 2nd floor" |
+| location | string | required, 1–120 chars, e.g. "Block A, 2nd floor" |
 | capacity | number or null | rooms: whole number ≥ 1; equipment: null |
 | description | string | optional, ≤ 500 chars |
 | tags | string[] | optional, ≤ 10, each 1–30 characters, e.g. "Projector" |
@@ -137,6 +137,15 @@ JSON under `/api`. Authentication uses an httpOnly session cookie (§7). Every e
 | `GET /api/bookings/mine?view=upcoming` (or `history`) | Signed in | Own bookings → 200 |
 | `GET /api/bookings?view=upcoming` (or `history`) | Admin | All bookings, with member name and email → 200 |
 | `POST /api/bookings/:id/cancel` | Owner or admin (other members get 404) | Atomic cancellation → 200 |
+
+`POST` and `PATCH /api/resources` bodies (admins only):
+
+- **`POST`** takes `name`, `type` and `location` (all required), and `capacity` (required for a room), `description` and `tags` (optional). The new resource is always active, so `isActive` in the body is ignored. It returns 201 with the resource.
+- **`PATCH`** takes any of `name`, `type`, `location`, `capacity`, `description`, `tags` and `isActive`, and at least one of them. `isActive: false` deactivates and `true` reactivates. Only the fields it is given change. It returns 200 with the whole resource.
+- **Both** drop unknown keys (an `id`, a `role`, timestamps), trim text, and drop repeated tags ignoring case. The limits are 80 characters for the name, 120 for the location, 500 for the description, and 10 tags of at most 30 characters. A room's capacity must be a whole number of 1 or more; equipment has none. A capacity sent with equipment is checked like any other (a whole number of 1 or more, or `null`) and then ignored, and turning a room into equipment clears the stored one.
+- **Order of checks:** signed in (401), then admin (403, whatever a well-formed JSON body holds or the id is), then the body (400), then the resource (404), then the database (409 for a taken name). One exception: `express.json()` runs ahead of every route, so text that isn't valid JSON, or a body over 100 kB, is a 400 even for a signed-out caller or a member. Nothing is read or written in that case.
+- **Capacity rules run on every update.** They live in the model's validate hook, so `PATCH` loads the document, sets only the fields above and calls `save()`. It never uses `updateOne` or `findOneAndUpdate`, which skip that hook.
+- **Simultaneous edits** of one resource all succeed, and the last write wins per field. Saving `tags` makes Mongoose check the document's version, so a save that lost a race is applied again to a fresh copy (up to 10 times) instead of failing.
 
 Availability response:
 
@@ -312,17 +321,33 @@ Notes
 - **Atlas side effect.** The `resources` collection and its two indexes appeared in Atlas before the seed ran. The user's running `tsx watch` dev API restarted on the M2 code, and startup builds the indexes of every model.
 - **No client tests.** As in M1, the UI was verified with scripted headless-Edge runs that aren't kept in the repo (§3).
 
-### M3: Admin resource management (≈ 1.5 h). Status: not started
+### M3: Admin resource management (≈ 1.5 h). Status: done (built and verified 2026-11-15, on an in-memory replica set)
 
 Checklist
-- [ ] `POST /api/resources` and `PATCH /api/resources/:id` with validation (rooms need a capacity; names are unique)
-- [ ] Manage resources page: table on desktop, cards on mobile, status filter, Add/Edit dialog, Deactivate/Reactivate with confirmation
-- [ ] API tests: member → 403; invalid body → 400; deactivated resource → 404 for members
+- [x] `POST /api/resources` and `PATCH /api/resources/:id` with validation (rooms need a capacity; names are unique)
+- [x] Manage resources page: table on desktop, cards on mobile, status filter, Add/Edit dialog, Deactivate/Reactivate with confirmation
+- [x] API tests: member → 403; invalid body → 400; deactivated resource → 404 for members
 
-Acceptance
-- An admin adds "Room 204" with capacity 6, and a member sees it in discovery after reloading.
-- Saving a room without a capacity shows an inline field error, and the API returns 400 `VALIDATION_ERROR`.
-- Deactivating a resource hides it from members (its URL shows "Resource not found"). Reactivating restores it.
+Acceptance (results on 2026-11-15; details in the §12 log). Browser checks ran in headless Edge against the Vite dev client and the built API, with an in-memory replica set standing in for Atlas.
+- ✅ An admin adds "Room 204" with capacity 6 from the Add dialog. The success message "Room 204 added" is focused, the row appears in catalog order, and after signing in as a member and reloading, "Room 204" is in discovery (10 resources) with its own page.
+- ✅ Saving a room without a capacity shows the inline error "Enter a capacity of 1 or more" on the Capacity field, with focus there, and sends nothing. The same request made straight to the API returns 400 `VALIDATION_ERROR` with `details.fields.capacity`.
+- ✅ Deactivating "Room 204" (after the confirmation) removes it from a member's discovery, and its URL shows "Resource not found". Reactivating it (no confirmation) restores both.
+- ✅ A member calling `POST` or `PATCH /api/resources` directly gets 403 and nothing changes; opening `/admin/resources` shows the 403 page.
+- ✅ Loading, empty, no-match, error and success states, at 1280, 1024, 768 and 375 px (§12 log).
+
+Notes
+- **The M2 carryover is closed.** `PATCH` loads the document, sets only the permitted fields and calls `save()`, so the capacity rules in the model's validate hook run on every update. Tests that an `updateOne`-based version could not pass: turning equipment into a room without a capacity is refused (400) and leaves it unchanged; turning a room into equipment clears the stored capacity even when none is sent; clearing a room's capacity is refused.
+- **Decisions where this plan was silent** (also in §5, §6 and DESIGN.md §5.8):
+  - A location is at most 120 characters (the other text fields already had limits).
+  - Tags are trimmed and de-duplicated ignoring case; every tag problem is reported on the single `tags` field, so the form can show it.
+  - A capacity sent for equipment is checked like any other and then ignored, which matches the model's rule that equipment has none.
+  - The Edit form sends only the fields that changed, so saving one field can't undo another admin's edit of a different field. With nothing changed, the dialog says so and sends nothing.
+  - Deactivating and reactivating go through `PATCH` with `isActive`; there is no separate endpoint and no delete (D9).
+  - The page's default view is All, so a deactivated row stays and turns Inactive. Search covers the name and the location.
+  - After a change, the page updates the row from the server's response instead of reloading the list, and slots it in with the same ordering rule as the server (checked against a fresh API call in the browser run).
+- **Shared components extended, not redesigned:** `Dialog` (a 640 px form width, a full-screen sheet below 768 px, a busy state that blocks every way of closing, focus on the title for text-only confirmations), `Message` (a dismiss button), `Button` (a compact size for table rows), `SearchField` (label and caption), plus new `SelectField`, `TextAreaField` and `ViewSwitch`.
+- **Not run:** a check against Atlas (nothing here needs it: no new collection or index, and the mutation tests belong on an isolated database); mutation checks on the new tests; screen-reader testing; Safari. The user's own dev API reaches Atlas, so the first real edit through the page will be the first write to Atlas through these endpoints.
+- **No client tests,** as in M1 and M2: the UI was verified with scripted headless-Edge runs that aren't kept in the repo (§3).
 
 ### M4: Booking engine, API only (≈ 3 h). Status: not started
 
@@ -454,6 +479,12 @@ Manual checks (M5–M7): two-browser conflict test (normal plus private window),
 | 2026-11-15 | M2 | Discovery in a browser on the user's own dev stack (Vite 5173, API 4000, Atlas), signing in as the seeded member | Pass | `/resources` showed "8 resources" in the expected order; opening a card showed the resource page; the session cookie wasn't readable from scripts. Only counts and names were printed |
 | 2026-11-15 | M2 | Independent code review (medium) | Done | 8 findings. 5 fixed: the seed's duplicate-key race, the filter sheet staying open when the window widens, the type sort leaning on string order (now sorted explicitly in code, with the name sort served by the collated index), unchecked errors in `useApiData` (a failed body read is now a network error), and a drag from inside the sheet closing it. 1 recorded for M3 (capacity rules are not enforced on updates). 2 were not code: a temporary verification config (deleted before committing) and docs still to update (done here) |
 | 2026-11-15 | M2 | Credential scan of the full working-tree diff against `.env` and `atlas-credentials.env` | Pass | No value found; no Atlas hostnames in the diff |
+| 2026-11-15 | M3 | `npm run typecheck`, `npm run build` | Pass | Client and server; `client/dist` CSS 24.77 kB, JS 369.62 kB |
+| 2026-11-15 | M3 | `npm test` | Pass | 190 tests in 7 files (was 90): resources-admin 100 (new), resources 33, auth 38, seed 7, config 8, health 2, guard 2. The new file covers 401 and 403 on every kind of change, 403 before 400 and 404, create and edit, every invalid field with its exact message, the capacity rules on update (the M2 carryover), duplicate names including two requests racing, simultaneous edits of the tags, deactivate and reactivate as members see them, and mass-assignment attempts |
+| 2026-11-15 | M3 | Browser acceptance script: headless Edge, Vite dev client plus the built API (started and stopped by the script), in-memory replica set | Pass | 107/107 on the final code. A member is refused (403 page, 403 from direct `POST` and `PATCH`, database unchanged); the list in catalog order with the table's markup, 32 px row actions and the status links; search, type and status filters; the Add dialog (every field, empty submit shows every error at once with focus on the first, a room without a capacity shows the inline error and sends nothing, the API's own 400, Enter submits, a taken name appears on the Name field, Equipment hides Capacity); success messages focused and dismissible; the new room visible to a member after a reload; Edit (prefilled, abandoned edit gone on reopening, Esc returns focus to the trigger, only changed fields are sent so tags another admin set meanwhile survive, "No changes to save" when nothing changed, rename re-sorts like the server, room to equipment drops the capacity, refused without one); Deactivate (focus on the title, "Keep active", the member's list and the resource's URL "Resource not found", the Inactive view) and Reactivate (no dialog, restored for members); a request in progress locks the dialog (Close, Cancel, backdrop, Esc twice, a second submit ignored, exactly one PATCH); the API stopped (add, deactivate and reactivate failures, the list error state with "Try again" and its focus); the loading skeleton and the empty catalog; 375 px cards, full-screen form sheet, bottom-sheet confirmation, 44 px targets and no overflow; 768 and 1024 px tables fit, and unbroken 80/120-character text and long tags never make the page scroll sideways. Only deliberate HTTP errors reached the console (400, 401, 403, 404, 409, and 500 from the dev proxy while the API was stopped) |
+| 2026-11-15 | M3 | The M2 browser script re-run against the changed shared components (`Dialog`, `SearchField`, `Button`, `Message`) | Pass | 68/68, after one fix. The first re-run failed: a `close` event from an earlier closing arrived after the filter sheet had been opened again and shut it. `Dialog` now ignores a `close` event while its dialog is open |
+| 2026-11-15 | M3 | Independent code review of the diff (a fresh agent, code only, nothing run) | Done | No authorization hole, mass-assignment path or crafted-body 500 found. 4 low-severity findings, all checked against the code and all valid: (1) the JSON body parser runs before authentication, so unparseable JSON from a signed-out caller or a member is a 400, not 401 or 403 (documented in §6; the test that claimed otherwise sent form data and was corrected); (2) two simultaneous edits of the tags gave 500 from a Mongoose version conflict (reproduced with a failing test: six simultaneous edits returned 200, 500, 500, 500, 200, 500; the service now reloads and re-applies the change, and the same test passes three runs in a row); (3) an invalid capacity for equipment is refused with 400 although §6 said it was ignored (the wording is corrected: it is checked, then ignored); (4) the Edit form sent every field, so it could undo another admin's change to a field it never touched (it now sends only changed fields). Also removed a test that passed vacuously |
+| 2026-11-15 | M3 | Test-tooling problems found and fixed on the way (not app bugs) | Fixed | The headless browser's page turned `hidden` after some minutes and stopped producing frames, which delays `<dialog>` `close` events (flags and a CDP timeout added); a wrong expectation of mine that a table with unbroken 120-character text must fit at 1024 px. Restarts of the in-memory MongoDB left 23 `mongod` processes and Edge profiles that filled the C: drive (MongoDB then refused writes); all were mine, identified by command line, and removed (about 12 GB freed). Notes for future runs are in HANDOFF.md |
 
 ## 13. Decisions (confirmed 2026-11-13)
 

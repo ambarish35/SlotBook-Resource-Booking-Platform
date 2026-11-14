@@ -6,6 +6,7 @@ import { AppShell } from './components/AppShell';
 import { RootLayout } from './components/RootLayout';
 import { RedirectIfSignedIn, RequireAdmin, RequireAuth } from './components/RouteGuards';
 import { LoginPage } from './pages/LoginPage';
+import { ManageResourcesPage } from './pages/ManageResourcesPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { ResourceDetailPage } from './pages/ResourceDetailPage';
@@ -40,15 +41,7 @@ const router = createBrowserRouter([
               {
                 element: <RequireAdmin />,
                 children: [
-                  {
-                    path: 'admin/resources',
-                    element: (
-                      <PlaceholderPage
-                        title="Manage resources"
-                        note="Resource management isn't built yet. It arrives in a later milestone."
-                      />
-                    ),
-                  },
+                  { path: 'admin/resources', element: <ManageResourcesPage /> },
                 ],
               },
               { path: '*', element: <NotFoundPage /> },

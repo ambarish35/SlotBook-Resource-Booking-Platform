@@ -214,9 +214,10 @@ describe('Resource model', () => {
     await expect(Resource.create({ name: 'X', type: 'lab' as never, location: 'A' })).rejects.toThrow(/type/i);
   });
 
-  it('limits name, description and tags', async () => {
+  it('limits name, location, description and tags', async () => {
     const base = { type: 'room', location: 'A', capacity: 2 } as const;
     await expect(Resource.create({ ...base, name: 'n'.repeat(81) })).rejects.toThrow(/name/i);
+    await expect(Resource.create({ ...base, name: 'Ok', location: 'l'.repeat(121) })).rejects.toThrow(/location/i);
     await expect(Resource.create({ ...base, name: 'Ok', description: 'd'.repeat(501) })).rejects.toThrow(/description/i);
     await expect(
       Resource.create({ ...base, name: 'Ok', tags: Array.from({ length: MAX_TAGS + 1 }, (_, i) => `tag ${i}`) }),

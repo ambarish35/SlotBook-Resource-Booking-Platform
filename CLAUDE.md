@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-SlotBook is a MERN app for booking meeting rooms and shared equipment within one organization. **Status: M0 (foundation), M1 (accounts and roles) and M2 (resource catalog and discovery) are done and verified. M3 (admin resource management) is next.**
+SlotBook is a MERN app for booking meeting rooms and shared equipment within one organization. **Status: M0 (foundation), M1 (accounts and roles), M2 (resource catalog and discovery) and M3 (admin resource management) are done and verified. M4 (booking engine, API only) is next.**
 
 ## Before implementing
 
@@ -19,7 +19,7 @@ SlotBook is a MERN app for booking meeting rooms and shared equipment within one
 
 ## Commands
 
-Run these from the repo root. Each one ran successfully (M0 to M2, 2026-11-13 to 2026-11-15), and `npm run seed` has run against both an in-memory replica set and Atlas.
+Run these from the repo root. Each one ran successfully (M0 to M3, 2026-11-13 to 2026-11-15), and `npm run seed` has run against both an in-memory replica set and Atlas.
 
 | Command | What it does |
 |---|---|

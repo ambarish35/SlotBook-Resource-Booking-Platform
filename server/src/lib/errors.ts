@@ -6,6 +6,7 @@ export type ErrorCode =
   | 'FORBIDDEN'
   | 'NOT_FOUND'
   | 'EMAIL_TAKEN'
+  | 'NAME_TAKEN'
   | 'INTERNAL_ERROR';
 
 /** The JSON body of every error response: `{ "error": { "code", "message", "details"? } }`. */
@@ -43,3 +44,5 @@ export const forbidden = (message = "You don't have access to this.") => new App
 export const notFound = (message = 'Not found.') => new AppError(404, 'NOT_FOUND', message);
 
 export const emailTaken = () => new AppError(409, 'EMAIL_TAKEN', 'An account with this email already exists.');
+
+export const nameTaken = () => new AppError(409, 'NAME_TAKEN', 'A resource with this name already exists.');

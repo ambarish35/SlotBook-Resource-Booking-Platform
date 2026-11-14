@@ -10,7 +10,7 @@ export type ApiData<T> =
  * Loads `GET /api{path}` when the component mounts or the path changes, and again whenever `reload`
  * is called ("Try again"). A response that arrives after the path changed, or after unmount, is ignored.
  */
-export function useApiData<T>(path: string): { state: ApiData<T>; reload: () => void } {
+export function useApiData<T>(path: string): { state: ApiData<T>; reload: () => void; mutate: (update: (data: T) => T) => void } {
   const [state, setState] = useState<ApiData<T>>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
 
@@ -31,5 +31,9 @@ export function useApiData<T>(path: string): { state: ApiData<T>; reload: () => 
   }, [path, attempt]);
 
   const reload = useCallback(() => setAttempt((count) => count + 1), []);
-  return { state, reload };
+  // Applies a change to data that has loaded, such as a row the server just confirmed, without another request.
+  const mutate = useCallback((update: (data: T) => T) => {
+    setState((previous) => (previous.status === 'success' ? { status: 'success', data: update(previous.data) } : previous));
+  }, []);
+  return { state, reload, mutate };
 }

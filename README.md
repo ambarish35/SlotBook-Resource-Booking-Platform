@@ -1,10 +1,10 @@
 # SlotBook
 
-SlotBook is a web app for booking meeting rooms and shared equipment within one organization. Members can already find a resource; they will also see its free 30-minute slots and book several in one all-or-nothing step, while admins maintain the resource catalog. The database itself will make double booking impossible.
+SlotBook is a web app for booking meeting rooms and shared equipment within one organization. Members can already find a resource and admins already maintain the catalog; members will also see free 30-minute slots and book several in one all-or-nothing step. The database itself will make double booking impossible.
 
 ## Status
 
-Under construction, built one milestone at a time. **Milestones M0 (foundation), M1 (accounts and roles) and M2 (resource catalog and discovery) are done and verified.** Booking and the admin tools are not built yet: the My bookings and Manage resources pages exist only as placeholders that say so, and a resource's page shows its details but no slots to book. [PLAN.md](PLAN.md) has the scope, data model, API, milestones and the verification log.
+Under construction, built one milestone at a time. **Milestones M0 (foundation), M1 (accounts and roles), M2 (resource catalog and discovery) and M3 (admin resource management) are done and verified.** Booking is not built yet: the My bookings page exists only as a placeholder that says so, and a resource's page shows its details but no slots to book. [PLAN.md](PLAN.md) has the scope, data model, API, milestones and the verification log.
 
 ### Implemented
 
@@ -18,11 +18,14 @@ Under construction, built one milestone at a time. **Milestones M0 (foundation),
   - Signed-in users see the catalog as cards: rooms first, then equipment. Search by name, location or tag, filter by type and minimum capacity (all in the browser, so results appear as you type), and open a resource to see its location, capacity, tags and description.
   - Loading, empty, no-results and error states, and a mobile layout where the filters open from a "Filters" button.
   - `npm run seed` also creates 8 demo resources (rooms and equipment, including projectors). It is demo data in the database, not sample data baked into the screens.
-  - Server tests (90 in total) cover the auth flow, roles, error handling and the catalog.
+- **Admin resource management (M3):**
+  - Admins get a Manage resources page: every resource, active or not, as a table on desktop and as cards on mobile, with search, a type filter and Active / Inactive / All views.
+  - They add and edit a room or a piece of equipment in a dialog (a room needs a capacity, and names are unique ignoring case), deactivate one after a confirmation, and reactivate it. A deactivated resource disappears for members until it is reactivated.
+  - The API refuses these changes from members with 403, so hiding the buttons is not the only protection.
+  - Server tests (190 in total) cover the auth flow, roles, error handling, the catalog and admin resource management.
 
 ### Planned, not built
 
-- **M3:** admins add, edit, deactivate and reactivate resources.
 - **M4–M5:** availability on a 30-minute grid (08:00–20:00 IST) and atomic booking of 1–8 slots, with a unique index guarding against double booking.
 - **M6:** My bookings with cancellation, plus an admin view of all bookings.
 - **M7:** polish, accessibility checks and a final pass over this README. **M8** (optional): deployment.

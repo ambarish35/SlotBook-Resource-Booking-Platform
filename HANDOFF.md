@@ -1,4 +1,4 @@
-# SlotBook — Session handoff (after M2)
+# SlotBook — Session handoff (after M3)
 
 Read [CLAUDE.md](CLAUDE.md), [PLAN.md](PLAN.md) and [DESIGN.md](DESIGN.md) first. This file only adds session context; if it ever disagrees with PLAN.md, PLAN.md wins.
 
@@ -7,13 +7,13 @@ Read [CLAUDE.md](CLAUDE.md), [PLAN.md](PLAN.md) and [DESIGN.md](DESIGN.md) first
 - **Branch:** `main`.
 - **Pushed:** `8fbebc3` ("docs: add session handoff") was the last pushed commit at the last local check. Later commits (`git log`) aren't pushed; the user does the pushing.
 - **Working tree:** clean after each commit, apart from ignored local files (`.env`, other `*.env` files, `node_modules/`, `dist/`).
-- **Milestones:** M0, M1 and M2 are done and verified, each including a check against Atlas. M3 hasn't started; begin it only when the user asks.
+- **Milestones:** M0, M1 and M2 are done and verified, each including a check against Atlas. M3 is done and verified on an in-memory replica set only: it adds no collection or index, and by choice nothing was written to Atlas for it. M4 hasn't started; begin it only when the user asks.
 
 ## Environment (already set up)
 
 - The user's `.env` holds `MONGODB_URI`, `JWT_SECRET` and the four required `SEED_*` variables. The API needs `JWT_SECRET` to start. Only variable names were ever inspected; never print the values.
-- **Atlas now holds** 2 users (the seeded admin and member) and the 8 demo resources, with the unique and compound indexes for both collections.
-- **The user's own dev servers may be running** on ports 4000 (`tsx watch` API, against Atlas) and 5173 (Vite). They were during M2, and they restart on source edits, so they also build indexes in Atlas at startup (this is how the empty `resources` collection appeared in Atlas before the M2 seed). Never stop them. Check the ports before starting servers.
+- **Atlas now holds** 2 users (the seeded admin and member) and the 8 demo resources, with the unique and compound indexes for both collections. M3 changed none of that, so the first real edit through the Manage resources page will be the first write to Atlas through the new endpoints.
+- **The user's own dev servers may be running** on ports 4000 (`tsx watch` API, against Atlas) and 5173 (Vite). They were at the start of M2 and M3, and they restart on source edits, so they also build indexes in Atlas at startup (this is how the empty `resources` collection appeared in Atlas before the M2 seed). Never stop them. Check the ports before starting servers.
 - **Running verification servers without touching those:**
   - Use an in-memory replica set for the database (`mongodb-memory-server`, started from a short script), and run the built API with `PORT=4100`, a throwaway `JWT_SECRET` and `MONGODB_URI` in the process environment only.
   - Vite's proxy target is fixed at `http://localhost:4000` in `client/vite.config.ts`. For another port, use a temporary untracked config that merges the base config with `server.port` and `server.proxy` changed (`vite --config <file>`), and delete it afterwards. Don't commit it.
@@ -59,12 +59,27 @@ Read [CLAUDE.md](CLAUDE.md), [PLAN.md](PLAN.md) and [DESIGN.md](DESIGN.md) first
 - Components: `Dialog` (native `<dialog>`; bottom sheet below 640 px, or below 768 px with `sheetBelow="md"`; content mounted only while open; a drag that starts inside and ends on the backdrop doesn't close it), `IconButton`, `EmptyState`, `Tag` and `CountBadge`, `SkeletonBlock`, `SearchField`, `ResourceFilters`, `ResourceCard`. `PageHeader` has a new `badge` slot.
 - Pages: `ResourcesPage` (discovery, `/resources`) and `ResourceDetailPage` (`/resources/:id`, details only, with an honest "Booking isn't available yet" note until M5). UI decisions are recorded in DESIGN.md §5.3 and §5.4.
 
-**Conventions to reuse in M3 onward**
-- Client: call the API only through `apiFetch` (or `useApiData` for reads); render exactly one `PageHeader` per page, kept mounted through loading and error states so focus on the `h1` survives; show results with `Message` and move focus to it after the user's own actions (`useRetryFocus` covers "Try again"); use `buttonClasses()` when a `<Link>` should look like a button; use `Dialog` with `initialFocus` for modals; keep placeholders honest (DESIGN.md §9).
-- Server: throw the `AppError` helpers; guard routes with `requireAuth` (and `requireAdmin`) passed into route factories; validate bodies with `validateBody` and queries with `parseQuery`.
-- **For M3's PATCH:** load the resource, change it and `save()`, so the model's capacity rules run. A plain `updateOne` would bypass them. The Manage page needs inactive resources too, so it should call `GET /api/resources?status=all`.
+## What M3 implements
 
-**Not built yet:** bookings, availability and slots, the admin pages, ESLint, CI.
+**Server**
+- `POST /api/resources` and `PATCH /api/resources/:id` in `routes/resources.ts`, behind `requireAuth` and then `requireAdmin`, then `validateBody`. A member gets 403 whatever the body or the id; only then are the body (400) and the resource (404) checked. The contract is in PLAN.md §6.
+- `schemas/resources.ts`: `createResourceBody` and `updateResourceBody` (Zod; unknown keys dropped, so `isActive` can't be set on create and `id` or timestamps never reach the model; PATCH needs at least one field). Tag problems are all reported on the single `tags` key, never `tags.2`, because the form has one Tags field. The limits come from constants exported by the model.
+- `services/resources.ts`: `createResource` and `updateResource`. **`updateResource` loads the document, sets only `EDITABLE_FIELDS` and calls `save()`**, so the model's validate hook (room capacity) runs; that closes the M2 carryover. `saveResource` turns a duplicate-key error into 409 `NAME_TAKEN` and a Mongoose `ValidationError` into 400 with one message per field. Never use `updateOne` or `findOneAndUpdate` on resources. Setting `tags` makes Mongoose check `__v`, so `updateResource` reloads and re-applies the change when a save loses a race (a `VersionError`, up to 10 times); without that, two simultaneous tag edits gave a 500.
+- `models/Resource.ts` now exports the field limits (`MAX_NAME_LENGTH` 80, `MAX_LOCATION_LENGTH` 120, new, `MAX_DESCRIPTION_LENGTH`, `MAX_TAGS`, `MAX_TAG_LENGTH`). `lib/errors.ts` adds `nameTaken()`.
+- **Tests:** 190 in 7 files. `test/resources-admin.test.ts` has 100: 401 and 403 for every kind of change, 403 before 400 and before 404, creating and editing, every invalid field with its exact message, the capacity rules on update, duplicate names (including two requests racing), deactivation and reactivation as seen by members, and mass-assignment attempts. `resources.test.ts` also checks the new location limit.
+
+**Client**
+- `pages/ManageResourcesPage.tsx` (`/admin/resources`): loads `GET /api/resources?status=all`, then applies each confirmed change locally with `useApiData`'s new `mutate` and `upsertResource` (which sorts like the server). Status views are `?status=active|inactive` links (`ViewSwitch`); search, type, dialogs and the success or failure message are page state.
+- `components/ManageResourceList` (table from 768 px, cards below, both in the page and shown by CSS), `ResourceFormDialog` (Add and Edit), `DeactivateDialog`. `lib/resourceForm.ts` holds the form's values, checks (same limits and messages as the server), `toRequestBody`, `changedFields` (Edit sends only what changed, so it can't undo another admin's edit of a different field) and `errorsFromServer`. `lib/useOnOpen.ts` resets a mounted dialog's state each time it opens.
+- Shared components extended: `Dialog` (`size="form"` is 640 px and a full-screen sheet below its breakpoint, `busy` blocks Close, Esc and the backdrop and puts the dialog back if a browser closes it anyway, `initialFocus="title"`), `Message` (`onDismiss`), `Button` (`size="compact"`), `SearchField` (`label`, `caption`). New: `SelectField`, `TextAreaField`, `ViewSwitch`. UI decisions are in DESIGN.md §5.8.
+
+**Conventions to reuse in M4 onward**
+- Client: call the API only through `apiFetch` (or `useApiData` for reads); render exactly one `PageHeader` per page, kept mounted through loading and error states so focus on the `h1` survives; show results with `Message` and move focus to it after the user's own actions (`useRetryFocus` covers "Try again"); use `buttonClasses()` when a `<Link>` should look like a button; keep placeholders honest (DESIGN.md §9).
+- Dialogs: keep the component mounted and toggle `open` (removing an open `<dialog>` loses the focus return); pass `busy` while a request runs; pass `initialFocus` (a field's ref, or `"title"` for text-only confirmations). Dialogs that hold state reset it with `useOnOpen`. After a successful dialog action, the page's own effect focuses the result message, which runs after the dialog's effect has returned focus to its trigger.
+- Server: throw the `AppError` helpers; guard routes with `requireAuth` (and `requireAdmin`) passed into route factories; put `requireAdmin` before `validateBody`; validate bodies with `validateBody` and queries with `parseQuery`; save through a loaded document when a model hook holds a rule.
+- A `<Link>` that changes only the query string re-renders the page without moving focus to the `h1` (`RootLayout` reacts to the pathname only), which is what view switches want.
+
+**Not built yet:** bookings, availability and slots, My bookings, ESLint, CI.
 
 ## Checks that passed
 
@@ -72,8 +87,9 @@ PLAN.md §12 has the full log with details. In short:
 
 | Check | Result |
 |---|---|
-| `npm run typecheck`, `npm test` (90/90), `npm run build` | Pass (2026-11-15) |
-| Mutation checks on the new tests (M1: 3, M2: 6) | Each deliberate break turned tests red; reverted, byte-compared and re-run green |
+| `npm run typecheck`, `npm test` (190/190), `npm run build` | Pass (2026-11-15, after M3) |
+| Mutation checks on the new tests (M1: 3, M2: 6) | Each deliberate break turned tests red; reverted, byte-compared and re-run green. Not run for M3, at the user's request |
+| M3 browser acceptance (105/105, headless Edge, in-memory replica set), and the M2 script re-run on the changed shared components (68/68) | Pass (2026-11-15). Nothing for M3 was run against Atlas |
 | M1 browser acceptance (49/49) and mid-session expiry (6/6) | Pass (2026-11-13) |
 | M2 browser acceptance (68/68, headless Edge, in-memory replica set) | Pass (2026-11-15) |
 | Atlas, M1: `users` collection and sign-in through the real app | 2 users, bcrypt hashes, unique index; login and `me` 200 for both |
@@ -138,10 +154,18 @@ git diff --staged | node -e "const{parseEnv}=require('node:util');const e=parseE
   - `Emulation.setDeviceMetricsOverride` gives a true 375 px viewport. The plain `--screenshot` flag clamps windows narrower than about 500 px.
   - A JS `element.click()` doesn't move focus the way a real press does, so call `focus()` first when a check depends on focus. After Esc closes a dialog, wait until React has unmounted its content too, not just until `dialog.open` is false.
   - These scripts weren't added to the repo, because end-to-end tests are deferred (PLAN.md §3). In dev, Vite serves modules by URL, so `import('/src/lib/api.ts')` from the page reaches the app's own module instance.
+  - **Keep headless Edge visible to itself.** Launch it with `--disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-features=CalculateNativeWinOcclusion`, and send `Emulation.setFocusEmulationEnabled` and `Page.bringToFront`. Without them, after a few minutes the page reported `document.visibilityState` "hidden" and stopped producing animation frames; Chromium queues a `<dialog>`'s `close` event for the next frame, so Esc then left the dialog closed but React's state unchanged. That was the test browser, not an app bug. Give every CDP call a timeout, because a screenshot of a hidden page waits forever.
+  - **Esc and user activation.** A page-dispatched or scripted click isn't a user activation. Esc's `cancel` event is cancelable only after a real one (a CDP mouse press or key press counts), and Chrome closes a dialog whose Esc was refused once if Esc comes again without a fresh activation. `Dialog` handles that by reopening itself while `busy`.
+  - **Clean up after every run (this filled the C: drive during M3).** Delete the run's Edge profile (`slotbook-edge-*` in TEMP, hundreds of MB each). Run one in-memory MongoDB at a time, and when stopping it, stop its `mongod` child as well as the node process that started it, then delete its `mongo-mem-*` directory: force-killing only the parent leaves `mongod` and about 200 MB behind. Match processes by command line, not by name. MongoDB itself refuses writes when the drive has under 500 MB free, so check `Get-PSDrive C` if a seed fails with "available disk space".
 - **Writing scripts from Git Bash:** `python` here is the Windows launcher and hangs, so use `node`. A `\\r` inside a heredoc script can arrive as a real carriage return; build such strings with `String.fromCharCode`.
 - **Windows line endings:** `core.autocrlf` is true, so git prints "LF will be replaced by CRLF" warnings. The files in the repo are LF; ignore the warnings.
-- **README:** current through M2. Its final pass belongs to M7 (PLAN.md §11).
+- **README:** current through M3. Its final pass belongs to M7 (PLAN.md §11).
+- **Test scope for a milestone:** use an isolated database for anything that changes data, and don't re-run Atlas connectivity checks, mutation checks or Atlas writes just to repeat coverage the isolated tests already give. The user asked for this at the start of M3.
 
-## Next milestone: M3, admin resource management
+## Next milestone: M4, booking engine (API only)
 
-The full checklist is in PLAN.md §11. It adds `POST /api/resources` and `PATCH /api/resources/:id` with validation (rooms need a capacity, names are unique), the Manage resources page (a table on desktop, cards on mobile, a status filter, an Add/Edit dialog, Deactivate and Reactivate with confirmation), and API tests (member → 403, invalid body → 400, deactivated resource → 404 for members). Read the "For M3's PATCH" note above before writing the update path.
+Don't start it unless the user asks. The full checklist, §8 (the transaction design) and §12 (checks V1–V6) are in PLAN.md. In short: IST time helpers and one clock helper with unit tests for the §10 examples; the `Booking` and `SlotReservation` models with their indexes (the unique `{ resource, start }` index is the double-booking guard); the availability endpoint; transactional booking and cancellation; `GET /api/bookings/mine` and the admin `GET /api/bookings`; demo bookings created through the booking service in the seed; and the automated checks V1–V5. Things M4 will meet from earlier milestones:
+
+- Every model's indexes are built at API startup, so adding the two models will create their empty collections and indexes in Atlas as soon as the user's running `tsx watch` API restarts on the new code, before any seed.
+- A deactivated resource must give members 404 on availability and on booking too (V4); `getResource`'s rule in `services/resources.ts` is the one to reuse.
+- Deactivating a resource doesn't cancel its bookings (PLAN.md D9, §14); the Deactivate dialog's text already says so.
