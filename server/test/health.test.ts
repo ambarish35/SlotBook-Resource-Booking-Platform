@@ -1,22 +1,19 @@
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
-import { connectDatabase, disconnectDatabase } from '../src/db.js';
-import { TEST_SESSION } from './helpers.js';
+import { disconnectDatabase } from '../src/db.js';
+import { TEST_SESSION, startTestDatabase } from './helpers.js';
 
 describe('GET /api/health', () => {
   const app = createApp(TEST_SESSION);
-  let replSet: MongoMemoryReplSet | undefined;
+  let database: Awaited<ReturnType<typeof startTestDatabase>> | undefined;
 
   beforeAll(async () => {
-    replSet = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger' } });
-    await connectDatabase({ uri: replSet.getUri(), dbName: 'slotbook_test' });
+    database = await startTestDatabase();
   });
 
   afterAll(async () => {
-    await disconnectDatabase();
-    await replSet?.stop();
+    await database?.stop();
   });
 
   it('reports ok when connected to a replica set', async () => {

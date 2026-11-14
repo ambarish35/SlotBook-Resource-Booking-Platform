@@ -38,6 +38,10 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, _req, res, nex
     appError = error;
   } else if (isBodyParserError(error)) {
     appError = validationError({}, bodyParserMessage(error.type));
+  } else if (error instanceof URIError) {
+    // Express couldn't decode a path parameter (an id such as `%E0%A4%A`), so no route handler ran. It is a
+    // malformed id, which PLAN.md §6 answers with 404, the same as an id that doesn't exist.
+    appError = notFound();
   } else {
     const text = error instanceof Error ? `${error.name}: ${error.message}\n${error.stack ?? ''}` : String(error);
     console.error(`Unhandled API error: ${redactConnectionStrings(text)}`);

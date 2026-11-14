@@ -1,4 +1,4 @@
-import type { RequestHandler } from 'express';
+import type { Request, RequestHandler } from 'express';
 import { forbidden, unauthenticated } from '../lib/errors.js';
 import { isObjectIdString } from '../lib/object-id.js';
 import { SESSION_COOKIE, type SessionOptions, verifySessionToken } from '../lib/session.js';
@@ -29,6 +29,12 @@ export function createRequireAuth(options: SessionOptions): RequestHandler {
     req.user = toPublicUser(user);
     next();
   };
+}
+
+/** The signed-in user. Use in a handler that sits behind `requireAuth`, which always sets it. */
+export function currentUser(req: Request): PublicUser {
+  if (!req.user) throw unauthenticated();
+  return req.user;
 }
 
 /** Use after `requireAuth`. Members get 403 FORBIDDEN. */

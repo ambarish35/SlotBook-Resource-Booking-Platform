@@ -1,10 +1,10 @@
 # SlotBook
 
-SlotBook is a web app for booking meeting rooms and shared equipment within one organization. Members can already find a resource and admins already maintain the catalog; members will also see free 30-minute slots and book several in one all-or-nothing step. The database itself will make double booking impossible.
+SlotBook is a web app for booking meeting rooms and shared equipment within one organization. Members can already find a resource and admins already maintain the catalog. The booking engine behind it exists as an API: free 30-minute slots, several slots booked in one all-or-nothing step, and cancellation, with the database itself making double booking impossible. Members will get screens for it next.
 
 ## Status
 
-Under construction, built one milestone at a time. **Milestones M0 (foundation), M1 (accounts and roles), M2 (resource catalog and discovery) and M3 (admin resource management) are done and verified.** Booking is not built yet: the My bookings page exists only as a placeholder that says so, and a resource's page shows its details but no slots to book. [PLAN.md](PLAN.md) has the scope, data model, API, milestones and the verification log.
+Under construction, built one milestone at a time. **Milestones M0 (foundation), M1 (accounts and roles), M2 (resource catalog and discovery) and M3 (admin resource management) and M4 (booking engine, API only) are done and verified.** There is no booking screen yet: the My bookings page exists only as a placeholder that says so, and a resource's page shows its details but no slots to book. [PLAN.md](PLAN.md) has the scope, data model, API, milestones and the verification log.
 
 ### Implemented
 
@@ -22,11 +22,17 @@ Under construction, built one milestone at a time. **Milestones M0 (foundation),
   - Admins get a Manage resources page: every resource, active or not, as a table on desktop and as cards on mobile, with search, a type filter and Active / Inactive / All views.
   - They add and edit a room or a piece of equipment in a dialog (a room needs a capacity, and names are unique ignoring case), deactivate one after a confirmation, and reactivate it. A deactivated resource disappears for members until it is reactivated.
   - The API refuses these changes from members with 403, so hiding the buttons is not the only protection.
-  - Server tests (190 in total) cover the auth flow, roles, error handling, the catalog and admin resource management.
+- **Booking engine (M4, API only):**
+  - **Availability:** the 24 slots of a date (08:00–19:30 IST, 30 minutes each), from today to 30 days ahead, as available, unavailable or past. The caller's own slots are marked, and nobody else is identified.
+  - **Booking:** 1–8 slots on one date in one step. If even one slot is taken, nothing is booked. A unique index on resource and slot makes double booking impossible, and a transaction keeps a booking and its slot records together.
+  - **Cancelling:** the owner or an admin, before the booking starts. All its slots are freed at once and can be booked again straight away.
+  - **Lists:** a member's own upcoming and past bookings, and an admin list of everyone's.
+  - `npm run seed` also creates 4 demo bookings (some belong to the demo member, some to the demo admin). It is demo data in the database.
+  - Server tests (346 in total) cover the auth flow, roles, error handling, the catalog, admin resource management and the booking engine, including ten members booking the same slot at the same moment and getting exactly one booking.
 
 ### Planned, not built
 
-- **M4–M5:** availability on a 30-minute grid (08:00–20:00 IST) and atomic booking of 1–8 slots, with a unique index guarding against double booking.
+- **M5:** the screens for the booking engine: a date picker and slot grid on a resource's page, a review step and conflict handling.
 - **M6:** My bookings with cancellation, plus an admin view of all bookings.
 - **M7:** polish, accessibility checks and a final pass over this README. **M8** (optional): deployment.
 
@@ -45,7 +51,7 @@ You need **Node.js 22.11 or later** and a **MongoDB replica set**. A free [Mongo
    - `MONGODB_URI`: your connection string.
    - `JWT_SECRET`: at least 32 random characters. Generate one with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
    - `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_MEMBER_EMAIL`, `SEED_MEMBER_PASSWORD`: the demo accounts to create (passwords 8–72 characters).
-3. `npm run seed` creates the admin and member accounts from those values, plus the demo resources. It is safe to run again: it never changes an existing account's password or overwrites an existing resource.
+3. `npm run seed` creates the admin and member accounts from those values, plus the demo resources and a few demo bookings for the next few days. It is safe to run again: it never changes an existing account's password or overwrites an existing resource, and it adds demo bookings only when the demo accounts have no upcoming bookings.
 4. In two terminals, run `npm run dev:server` (API on http://localhost:4000) and `npm run dev:client` (app on http://localhost:5173, which forwards `/api` to the API).
 5. Open http://localhost:5173 and sign in with a seeded account, or create a member account on the register page.
 

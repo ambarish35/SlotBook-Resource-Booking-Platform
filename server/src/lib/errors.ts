@@ -7,6 +7,8 @@ export type ErrorCode =
   | 'NOT_FOUND'
   | 'EMAIL_TAKEN'
   | 'NAME_TAKEN'
+  | 'SLOT_UNAVAILABLE'
+  | 'BOOKING_NOT_CANCELLABLE'
   | 'INTERNAL_ERROR';
 
 /** The JSON body of every error response: `{ "error": { "code", "message", "details"? } }`. */
@@ -46,3 +48,22 @@ export const notFound = (message = 'Not found.') => new AppError(404, 'NOT_FOUND
 export const emailTaken = () => new AppError(409, 'EMAIL_TAKEN', 'An account with this email already exists.');
 
 export const nameTaken = () => new AppError(409, 'NAME_TAKEN', 'A resource with this name already exists.');
+
+/** A slot the booking asked for can't be booked: `booked` (taken by someone) or `past` (it has already started). */
+export interface UnavailableSlot {
+  start: string;
+  reason: 'booked' | 'past';
+}
+
+/** 409 for a booking request that includes an unavailable slot. The whole request is refused (PLAN.md §8). */
+export const slotUnavailable = (slots: UnavailableSlot[]) =>
+  new AppError(
+    409,
+    'SLOT_UNAVAILABLE',
+    slots.every((slot) => slot.reason === 'past')
+      ? 'Some of the times you chose have already started. Nothing was booked.'
+      : 'Some of the times you chose are no longer available. Nothing was booked.',
+    { slots },
+  );
+
+export const bookingNotCancellable = (message: string) => new AppError(409, 'BOOKING_NOT_CANCELLABLE', message);

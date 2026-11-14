@@ -1,6 +1,7 @@
 import { type RequestHandler, Router } from 'express';
-import { requireAdmin } from '../middleware/auth.js';
+import { currentUser, requireAdmin } from '../middleware/auth.js';
 import { parseQuery, validateBody } from '../middleware/validate.js';
+import { availabilityQuery } from '../schemas/bookings.js';
 import {
   type CreateResourceBody,
   type UpdateResourceBody,
@@ -8,6 +9,7 @@ import {
   listResourcesQuery,
   updateResourceBody,
 } from '../schemas/resources.js';
+import { getAvailability } from '../services/availability.js';
 import { createResource, getResource, listResources, updateResource } from '../services/resources.js';
 
 /**
@@ -32,6 +34,12 @@ export function createResourcesRouter(requireAuth: RequestHandler): Router {
 
   router.get('/:id', async (req, res) => {
     res.json(await getResource(req.params.id, { isAdmin: req.user?.role === 'admin' }));
+  });
+
+  // The 24 slots of an IST date (PLAN.md §6). A member gets 404 for an inactive resource, like the detail route.
+  router.get<{ id: string }>('/:id/availability', async (req, res) => {
+    const { date } = parseQuery(availabilityQuery, req.query);
+    res.json(await getAvailability(req.params.id, date, currentUser(req)));
   });
 
   router.patch<{ id: string }>('/:id', requireAdmin, validateBody(updateResourceBody), async (req, res) => {

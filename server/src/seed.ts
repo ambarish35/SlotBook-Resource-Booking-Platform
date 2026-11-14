@@ -1,10 +1,16 @@
 import { z } from 'zod';
 import { parseEnv } from './config.js';
+import { DEMO_BOOKINGS, type DemoBooking } from './demo-bookings.js';
 import { DEMO_RESOURCES, type DemoResource } from './demo-resources.js';
+import { now } from './lib/clock.js';
+import { AppError } from './lib/errors.js';
+import { addDays, istDateOf, slotStartAt } from './lib/time.js';
+import { Booking } from './models/Booking.js';
 import { NAME_COLLATION, Resource } from './models/Resource.js';
-import { User, type UserRole } from './models/User.js';
+import { User, type UserDocument, type UserRole, toPublicUser } from './models/User.js';
 import { emailField, nameField, newPasswordField } from './schemas/auth.js';
 import { createUser, isDuplicateKeyError } from './services/auth.js';
+import { createBooking } from './services/bookings.js';
 
 /** A password still holding the `<placeholder>` text copied from .env.example. */
 const seedPassword = newPasswordField.refine((value) => !/^<.*>$/.test(value), 'still holds the placeholder from .env.example');
@@ -90,4 +96,57 @@ export async function seedResources(
     }
   }
   return { created, existing };
+}
+
+/**
+ * Creates the demo bookings, through the booking service, for the seeded accounts (found by email).
+ *
+ * It is safe to run again, and it doesn't pile bookings up: nothing is created while either demo account has a
+ * confirmed booking that hasn't ended. Once those are over, a run creates a fresh set, dated from today, so the demo
+ * never goes stale. A demo booking whose resource is missing or inactive, or whose slots someone else holds, is
+ * skipped; anything else is left alone, including every existing booking.
+ */
+export async function seedBookings(
+  accounts: Pick<SeedAccount, 'role' | 'email'>[],
+  bookings: DemoBooking[] = DEMO_BOOKINGS,
+): Promise<{ created: number; skipped: number }> {
+  const users = new Map<UserRole, UserDocument>();
+  for (const account of accounts) {
+    const user = await User.findOne({ email: account.email });
+    if (user) users.set(account.role, user);
+  }
+
+  const current = now();
+  const upcoming = await Booking.exists({
+    user: { $in: [...users.values()].map((user) => user._id) },
+    status: 'confirmed',
+    end: { $gt: current },
+  });
+  if (upcoming) return { created: 0, skipped: bookings.length };
+
+  const today = istDateOf(current);
+  let created = 0;
+  let skipped = 0;
+  for (const demo of bookings) {
+    const user = users.get(demo.as);
+    const resource = await Resource.findOne({ name: demo.resource }).collation(NAME_COLLATION);
+    if (!user || !resource?.isActive) {
+      skipped += 1;
+      continue;
+    }
+    const date = addDays(today, demo.daysAhead);
+    const slotStarts = demo.times.map((time) => {
+      const start = slotStartAt(date, time);
+      if (!start) throw new Error(`Demo booking for ${demo.resource} has an invalid time: ${time}`);
+      return start;
+    });
+    try {
+      await createBooking(toPublicUser(user), { resourceId: resource.id, slotStarts });
+      created += 1;
+    } catch (error) {
+      if (!(error instanceof AppError) || error.code !== 'SLOT_UNAVAILABLE') throw error;
+      skipped += 1;
+    }
+  }
+  return { created, skipped };
 }

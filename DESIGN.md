@@ -1,6 +1,6 @@
 # SlotBook — Design
 
-> **Status: partly built.** This is the design spec for the MVP in [PLAN.md](PLAN.md). Built so far: the tokens, the app shell, sign in and register (M0–M1), resource discovery and the resource detail header (M2), and Manage resources (M3). Everything else here is still to be built.
+> **Status: partly built.** This is the design spec for the MVP in [PLAN.md](PLAN.md). Built so far: the tokens, the app shell, sign in and register (M0–M1), resource discovery and the resource detail header (M2), and Manage resources (M3). The booking engine behind the slot grid and My bookings exists as an API (M4) but has no screens yet. Everything else here is still to be built.
 
 ## 1. References
 
@@ -347,6 +347,7 @@ If even one selected slot is unavailable, the server rejects the whole booking a
 | Unavailable, just taken | `warning-subtle`, 1 px warning border, `warning` text | "10:00" and "Just taken" | `aria-disabled="true"` | None; becomes "Booked" at the next change |
 | Past | No fill, 1 px dashed `border`, `fg-muted` text | "10:00" and "Past" | `aria-disabled="true"` | None |
 
+- **Settled while building M4 (API):** the availability endpoint reports `status` as `available`, `unavailable` or `past`, and `mine` separately. A slot that has started is `past` even when it is booked, so a booked slot in the past arrives as `past` (with `mine: true` for its owner) and is drawn as Past. The "Unavailable" and "Unavailable, yours" rows above apply to slots that haven't started. "Just taken" is a client-only state (§5.6), never sent by the API.
 - Accessible names start with the visible time, then add the range and the state, for example "10:00 to 10:30 IST, booked".
 - A legend above the grid shows every state with its label.
 - Hover and focus never make an unavailable or past slot look selectable.
