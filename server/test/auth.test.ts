@@ -9,18 +9,10 @@ import { createRequireAuth, requireAdmin } from '../src/middleware/auth.js';
 import { apiNotFound, errorHandler } from '../src/middleware/error-handler.js';
 import { User } from '../src/models/User.js';
 import { createUser } from '../src/services/auth.js';
-import { TEST_SESSION, startTestDatabase } from './helpers.js';
+import { TEST_SESSION, sessionCookie, startTestDatabase } from './helpers.js';
 
 const app = createApp(TEST_SESSION);
 const person = { name: 'Asha Rao', email: 'asha@example.com', password: 'correct horse battery' };
-
-/** The `Cookie` request header for the session cookie a response set. */
-function sessionCookie(res: request.Response): string {
-  const setCookie = res.get('Set-Cookie') ?? [];
-  const entry = setCookie.find((cookie) => cookie.startsWith(`${SESSION_COOKIE}=`));
-  if (!entry) throw new Error('The response did not set a session cookie');
-  return entry.split(';')[0]!;
-}
 
 function tokenFor(userId: string, secret = TEST_SESSION.jwtSecret) {
   return jwt.sign({}, secret, { algorithm: 'HS256', expiresIn: '7d', subject: userId });

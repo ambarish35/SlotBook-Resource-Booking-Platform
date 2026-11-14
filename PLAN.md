@@ -1,6 +1,6 @@
 # SlotBook — Implementation Plan
 
-> **Status: Plan approved on 2026-11-13. M0 (foundation) is done and verified, including the live Atlas connection. M1 (accounts and roles) is done and verified, including the seeded accounts in Atlas. M2 is next.** Every checklist item below stays unchecked until it is built **and** verified.
+> **Status: Plan approved on 2026-11-13. M0 (foundation) is done and verified, including the live Atlas connection. M1 (accounts and roles) is done and verified, including the seeded accounts in Atlas. M2 (resource catalog and discovery) is done and verified, including its demo data in Atlas. M3 is next.** Every checklist item below stays unchecked until it is built **and** verified.
 > UI rules live in [DESIGN.md](DESIGN.md); working rules for coding agents live in [CLAUDE.md](CLAUDE.md).
 
 ## 1. Goal and scope
@@ -85,7 +85,7 @@ Indexes: `{ email: 1 }` unique.
 | location | string | required, e.g. "Block A, 2nd floor" |
 | capacity | number or null | rooms: whole number ≥ 1; equipment: null |
 | description | string | optional, ≤ 500 chars |
-| tags | string[] | optional, ≤ 10, e.g. "Projector" |
+| tags | string[] | optional, ≤ 10, each 1–30 characters, e.g. "Projector" |
 | isActive | boolean | default true; resources are deactivated, never deleted |
 
 Indexes: `{ name: 1 }` unique with a case-insensitive collation; `{ isActive: 1, type: 1 }`.
@@ -119,7 +119,7 @@ Invariant (checked in tests): a confirmed booking has exactly one slot record pe
 
 ## 6. API
 
-JSON under `/api`. Authentication uses an httpOnly session cookie (§7). Every error has the shape `{ "error": { "code", "message", "details"? } }`. A user is returned as `{ id, name, email, role }`, never with its password hash.
+JSON under `/api`. Authentication uses an httpOnly session cookie (§7). Every error has the shape `{ "error": { "code", "message", "details"? } }`. A user is returned as `{ id, name, email, role }`, never with its password hash. A resource is returned as `{ id, name, type, location, capacity, description, tags, isActive }`, and the list endpoint returns an array of them: rooms first and then equipment, each alphabetical ignoring case.
 
 | Method and path | Access | Purpose → success |
 |---|---|---|
@@ -289,21 +289,28 @@ Notes
 - **Cookie and M8.** The cookie is `Secure` only when `NODE_ENV=production`, so the production deployment must be served over HTTPS.
 - **No client tests.** The UI was checked with scripted headless-Edge runs. They aren't kept in the repo, because end-to-end tests are deferred (§3).
 
-### M2: Resource catalog and discovery (≈ 2 h). Status: not started
+### M2: Resource catalog and discovery (≈ 2 h). Status: done (built and verified 2026-11-15, including against Atlas)
 
 Checklist
-- [ ] Resource model and indexes; seed about 8 demo resources (rooms and equipment units, including a projector)
-- [ ] `GET /api/resources`, `GET /api/resources/:id`
-- [ ] Discovery page: search, type filter, minimum-capacity filter, result count, cards; loading, empty, no-results and error states; mobile layout
-- [ ] Resource detail header (info only; slots arrive in M5)
-- [ ] API tests: inactive resources excluded for members; 401 when signed out
+- [x] Resource model and indexes; seed about 8 demo resources (rooms and equipment units, including a projector)
+- [x] `GET /api/resources`, `GET /api/resources/:id`
+- [x] Discovery page: search, type filter, minimum-capacity filter, result count, cards; loading, empty, no-results and error states; mobile layout
+- [x] Resource detail header (info only; slots arrive in M5)
+- [x] API tests: inactive resources excluded for members; 401 when signed out
 
-Acceptance
-- The seeded resources appear as cards. Typing "proj" narrows the list instantly. Type and capacity filters combine, and "Clear filters" restores the full list.
-- A search with no matches shows the "No resources match your filters" empty state.
-- "View availability" opens `/resources/:id` showing the name, type, location, capacity and tags.
-- At 375 px wide the cards form one column and filters open from a "Filters" button.
-- With the API stopped, the page shows the error state with "Try again" rather than a blank screen.
+Acceptance (results on 2026-11-15; details in the §12 log). Browser checks ran in headless Edge against the Vite dev client and the built API, with an in-memory replica set standing in for Atlas. The data and API were then checked against Atlas, and the discovery page in a browser on the user's own dev stack.
+- ✅ The seeded resources appear as cards. Typing "proj" narrows the list instantly, from 8 to 4, with no further request to the API. Type and capacity filters combine, and "Clear filters" restores the full list.
+- ✅ A search with no matches shows the "No resources match your filters" empty state.
+- ✅ "View availability" opens `/resources/:id` showing the name, type, location, capacity and tags.
+- ✅ At 375 px wide the cards form one column and filters open from a "Filters" button, as a bottom sheet.
+- ✅ With the API stopped, the page shows the error state with "Try again" rather than a blank screen, and "Try again" loads the list once the API is back.
+
+Notes
+- **Demo data.** `npm run seed` now also creates 8 demo resources: Boardroom, Focus Room, Huddle 1, Huddle 2, Training Room, Projector 1, Projector 2 and Conference speakerphone. It skips any resource that already exists, matching names ignoring case, so it never overwrites an admin's edits or re-activates a deactivated resource. Running it again creates nothing.
+- **Behavior details.** `status` other than `active` or `all` gives 400; a malformed id gives 404, like an unknown one. A minimum capacity keeps only rooms of that size or more, because equipment has no capacity. Other UI decisions are recorded in DESIGN.md §5.3 and §5.4.
+- **For M3: the capacity rules are not enforced on updates.** They live in the model's validate hook (a room needs a whole-number capacity of 1 or more; equipment is forced to null). That hook doesn't run for `updateOne` or `findOneAndUpdate`, so M3's PATCH must load the document, change it and `save()`, or the rules can be bypassed.
+- **Atlas side effect.** The `resources` collection and its two indexes appeared in Atlas before the seed ran. The user's running `tsx watch` dev API restarted on the M2 code, and startup builds the indexes of every model.
+- **No client tests.** As in M1, the UI was verified with scripted headless-Edge runs that aren't kept in the repo (§3).
 
 ### M3: Admin resource management (≈ 1.5 h). Status: not started
 
@@ -437,6 +444,16 @@ Manual checks (M5–M7): two-browser conflict test (normal plus private window),
 | 2026-11-15 | M1 | Read-only check of the Atlas `users` collection after the user ran `npm run seed` | Pass | 2 users (1 admin, 1 member); both emails match the `SEED_*` variables; password hashes are bcrypt cost 10; the unique email index is present. Only counts and booleans were printed |
 | 2026-11-15 | M1 | Sign-in against Atlas through the real app (in-process server on an ephemeral port); credentials read from `.env` in memory only | Pass | Admin: login 200, role `admin`, `me` 200. Member: login 200, role `member`, `me` 200. Cookie `httpOnly` and `SameSite=Lax`. A wrong password gives 401 `INVALID_CREDENTIALS` |
 | 2026-11-15 | M1 | Browser sign-in as the seeded admin and member against Atlas | Pass (reported by the user; not re-run by the agent) | The user ran `npm run seed` and signed in as both accounts |
+| 2026-11-15 | M2 | `npm run typecheck`, `npm run build` | Pass | Client and server; `client/dist` CSS 22.30 kB, JS 350.56 kB |
+| 2026-11-15 | M2 | `npm test` | Pass | 90 tests in 6 files: resources 33 (401s, member and admin lists, `?status`, ordering, 404s, model rules, indexes, demo catalog, seeding, seed race), auth 38, seed 7, config 8, health 2, guard 2 |
+| 2026-11-15 | M2 | Mutation checks on the new tests | Pass | Six deliberate breaks, each turning tests red: members also seeing inactive resources in the list (4 tests), members opening an inactive resource (1), sorting by name only (2), removing authentication from the routes (4), dropping the explicit type ordering (2), removing the seed's duplicate-key tolerance (1). Each was reverted and byte-compared with the original, and the suite re-run green |
+| 2026-11-15 | M2 | Browser acceptance script: headless Edge, Vite dev client plus the built API (started and stopped by the script), in-memory replica set | Pass | 68/68 checks on the final code: empty catalog for a member and an admin; the real `npm run seed` CLI; 8 cards in order with tags, "+2 more" and only two interactive elements per card; "proj" narrows 8 to 4 with no extra API request; type and capacity filters combine; "Clear filters" restores everything; no-results state; detail pages, unknown and malformed ids, inactive resources for a member and an admin; 1280, 900 and 375 px layouts with 44 px targets; the filter sheet (focus, Esc, backdrop, a drag from inside, widening the window); API stopped → error state, failed retry, successful retry, and the focus after each. Only expected 401, 404 and 5xx responses reached the console |
+| 2026-11-15 | M2 | Atlas, read-only look before the seed | Pass | `users` had 2 documents. `resources` already existed with 0 documents and both indexes, created by the user's running `tsx watch` dev API when it restarted on the M2 code |
+| 2026-11-15 | M2 | `npm run seed` against Atlas, then again | Pass | First run: users unchanged, 8 demo resources created. Second run: 0 created, 8 already existed |
+| 2026-11-15 | M2 | The real app against Atlas (in-process server), real accounts read from `.env` in memory | Pass | Signed out: 401. Member: 200 with 8 resources, rooms before equipment, all demo resources present and active, equipment capacity null. Admin `?status=all` and member `?status=all`: 8 each. `?status=bogus`: 400. Detail: 200. Unknown id and malformed id: 404 |
+| 2026-11-15 | M2 | Discovery in a browser on the user's own dev stack (Vite 5173, API 4000, Atlas), signing in as the seeded member | Pass | `/resources` showed "8 resources" in the expected order; opening a card showed the resource page; the session cookie wasn't readable from scripts. Only counts and names were printed |
+| 2026-11-15 | M2 | Independent code review (medium) | Done | 8 findings. 5 fixed: the seed's duplicate-key race, the filter sheet staying open when the window widens, the type sort leaning on string order (now sorted explicitly in code, with the name sort served by the collated index), unchecked errors in `useApiData` (a failed body read is now a network error), and a drag from inside the sheet closing it. 1 recorded for M3 (capacity rules are not enforced on updates). 2 were not code: a temporary verification config (deleted before committing) and docs still to update (done here) |
+| 2026-11-15 | M2 | Credential scan of the full working-tree diff against `.env` and `atlas-credentials.env` | Pass | No value found; no Atlas hostnames in the diff |
 
 ## 13. Decisions (confirmed 2026-11-13)
 

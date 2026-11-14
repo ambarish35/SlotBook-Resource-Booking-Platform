@@ -1,7 +1,7 @@
 // `npm run seed`: creates the demo admin and member from SEED_* variables. Safe to run repeatedly.
 import { ConfigError, loadEnvFile, readDatabaseConfig } from '../config.js';
 import { DatabaseStartupError, connectDatabase, disconnectDatabase, redactConnectionStrings } from '../db.js';
-import { readSeedAccounts, seedAccounts } from '../seed.js';
+import { readSeedAccounts, seedAccounts, seedResources } from '../seed.js';
 
 async function main(): Promise<void> {
   loadEnvFile();
@@ -12,6 +12,8 @@ async function main(): Promise<void> {
   try {
     const results = await seedAccounts(accounts);
     console.log(`Seeded users: ${results.map(({ role, outcome }) => `${role} ${outcome}`).join(', ')}`);
+    const { created, existing } = await seedResources();
+    console.log(`Seeded demo resources: ${created} created, ${existing} already existed`);
   } finally {
     await disconnectDatabase();
   }

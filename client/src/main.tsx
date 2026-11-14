@@ -8,6 +8,8 @@ import { RedirectIfSignedIn, RequireAdmin, RequireAuth } from './components/Rout
 import { LoginPage } from './pages/LoginPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
+import { ResourceDetailPage } from './pages/ResourceDetailPage';
+import { ResourcesPage } from './pages/ResourcesPage';
 import { RegisterPage } from './pages/RegisterPage';
 import './index.css';
 
@@ -29,10 +31,8 @@ const router = createBrowserRouter([
             element: <AppShell />,
             children: [
               { index: true, element: <Navigate to="/resources" replace /> },
-              {
-                path: 'resources',
-                element: <PlaceholderPage title="Resources" note="Resource discovery isn't built yet. It arrives in a later milestone." />,
-              },
+              { path: 'resources', element: <ResourcesPage /> },
+              { path: 'resources/:id', element: <ResourceDetailPage /> },
               {
                 path: 'bookings',
                 element: <PlaceholderPage title="My bookings" note="Booking isn't built yet. It arrives in a later milestone." />,

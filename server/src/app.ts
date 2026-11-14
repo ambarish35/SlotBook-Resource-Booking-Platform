@@ -5,6 +5,7 @@ import type { SessionOptions } from './lib/session.js';
 import { createRequireAuth } from './middleware/auth.js';
 import { apiNotFound, errorHandler } from './middleware/error-handler.js';
 import { createAuthRouter } from './routes/auth.js';
+import { createResourcesRouter } from './routes/resources.js';
 
 export type AppOptions = SessionOptions;
 
@@ -24,6 +25,7 @@ export function createApp(options: AppOptions) {
 
   const requireAuth = createRequireAuth(options);
   app.use('/api/auth', createAuthRouter(requireAuth, options));
+  app.use('/api/resources', createResourcesRouter(requireAuth));
 
   app.use('/api', apiNotFound);
   app.use(errorHandler);

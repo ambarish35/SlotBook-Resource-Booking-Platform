@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-SlotBook is a MERN app for booking meeting rooms and shared equipment within one organization. **Status: M0 (foundation) and M1 (accounts and roles) are done and verified. M2 (resource catalog and discovery) is next.**
+SlotBook is a MERN app for booking meeting rooms and shared equipment within one organization. **Status: M0 (foundation), M1 (accounts and roles) and M2 (resource catalog and discovery) are done and verified. M3 (admin resource management) is next.**
 
 ## Before implementing
 
@@ -19,7 +19,7 @@ SlotBook is a MERN app for booking meeting rooms and shared equipment within one
 
 ## Commands
 
-Run these from the repo root. Each one ran successfully (M0 and M1, 2026-11-13 to 2026-11-15), and `npm run seed` has run against both an in-memory replica set and Atlas.
+Run these from the repo root. Each one ran successfully (M0 to M2, 2026-11-13 to 2026-11-15), and `npm run seed` has run against both an in-memory replica set and Atlas.
 
 | Command | What it does |
 |---|---|
@@ -30,9 +30,9 @@ Run these from the repo root. Each one ran successfully (M0 and M1, 2026-11-13 t
 | `npm test` | Server tests (Vitest + Supertest on an in-memory MongoDB replica set) |
 | `npm run build` | Builds `client/dist` and `server/dist` |
 | `npm start` | Runs the built API from `server/dist` |
-| `npm run seed` | Creates the admin and member accounts from the `SEED_*` variables; safe to run again (see PLAN.md §11, M1 notes) |
+| `npm run seed` | Creates the admin and member accounts from the `SEED_*` variables, plus the 8 demo resources; safe to run again (see PLAN.md §11, M1 and M2 notes) |
 
-Development needs two terminals, one for `npm run dev:server` and one for `npm run dev:client`. The API won't start until `JWT_SECRET` is set in `.env`.
+Development needs two terminals, one for `npm run dev:server` and one for `npm run dev:client`. The API won't start until `JWT_SECRET` is set in `.env`. The user may already have both running (ports 4000 and 5173): check before starting servers, never stop them, and run verification servers on other ports (see HANDOFF.md).
 
 ## Environment
 

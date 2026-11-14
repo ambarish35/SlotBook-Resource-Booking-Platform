@@ -43,6 +43,7 @@ function parseJson(text: string): unknown {
  */
 export async function apiFetch<T = void>(path: string, { method = 'GET', body }: RequestOptions = {}): Promise<T> {
   let response: Response;
+  let text: string;
   try {
     response = await fetch(`/api${path}`, {
       method,
@@ -50,11 +51,12 @@ export async function apiFetch<T = void>(path: string, { method = 'GET', body }:
       headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+    text = await response.text();
   } catch {
     throw new ApiError(0, 'NETWORK_ERROR', "We couldn't reach the server.");
   }
 
-  const data = parseJson(await response.text());
+  const data = parseJson(text);
   if (response.ok) return data as T;
 
   const envelope = (data as { error?: { code?: string; message?: string; details?: ApiError['details'] } } | undefined)?.error;

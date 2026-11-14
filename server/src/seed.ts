@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import { parseEnv } from './config.js';
+import { DEMO_RESOURCES, type DemoResource } from './demo-resources.js';
+import { NAME_COLLATION, Resource } from './models/Resource.js';
 import { User, type UserRole } from './models/User.js';
 import { emailField, nameField, newPasswordField } from './schemas/auth.js';
-import { createUser } from './services/auth.js';
+import { createUser, isDuplicateKeyError } from './services/auth.js';
 
 /** A password still holding the `<placeholder>` text copied from .env.example. */
 const seedPassword = newPasswordField.refine((value) => !/^<.*>$/.test(value), 'still holds the placeholder from .env.example');
@@ -62,4 +64,30 @@ export async function seedAccounts(accounts: SeedAccount[]): Promise<{ role: Use
     }
   }
   return results;
+}
+
+/**
+ * Creates each demo resource that doesn't exist yet and leaves existing ones alone, matching names
+ * ignoring case. An admin's later edits, or a resource they deactivated, are never overwritten.
+ */
+export async function seedResources(
+  resources: DemoResource[] = DEMO_RESOURCES,
+): Promise<{ created: number; existing: number }> {
+  let created = 0;
+  let existing = 0;
+  for (const resource of resources) {
+    if (await Resource.exists({ name: resource.name }).collation(NAME_COLLATION)) {
+      existing += 1;
+      continue;
+    }
+    try {
+      await Resource.create(resource);
+      created += 1;
+    } catch (error) {
+      // Another seed run created it between the check and the insert; that still means it exists.
+      if (!isDuplicateKeyError(error)) throw error;
+      existing += 1;
+    }
+  }
+  return { created, existing };
 }

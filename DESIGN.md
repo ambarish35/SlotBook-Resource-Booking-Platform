@@ -1,6 +1,6 @@
 # SlotBook — Design
 
-> **Status: Planning.** This is the design spec for the MVP in [PLAN.md](PLAN.md). Nothing here is built yet.
+> **Status: partly built.** This is the design spec for the MVP in [PLAN.md](PLAN.md). Built so far: the tokens, the app shell, sign in and register (M0–M1), and resource discovery and the resource detail header (M2). Everything else here is still to be built.
 
 ## 1. References
 
@@ -140,7 +140,7 @@ Neutral means a `surface-subtle` background with `fg-secondary` text. Badges are
 
 - Use the native `<dialog>` opened with `showModal()`. Only one dialog is open at a time, and no dialog opens another.
 - **Anatomy:** a header (`h2` title and a Close icon button), a short body, and a right-aligned footer (secondary, then primary).
-- **Width:** 480 px for confirmations, 640 px for forms. Below 640 px a dialog becomes a full-width bottom sheet with radius `xl` on its top corners, at most 90% of the viewport height, a scrolling body and a sticky footer.
+- **Width:** 480 px for confirmations, 640 px for forms. Below 640 px (768 px for the discovery filters) a dialog becomes a full-width bottom sheet with radius `xl` on its top corners, at most 90% of the viewport height, a scrolling body and a sticky footer.
 - **Focus:**
   - On open, focus moves to the first field. In a text-only confirmation it moves to the title (`tabindex="-1"`). It never starts on a destructive button.
   - On close, focus returns to the trigger, unless a result message appears; then focus moves to the message.
@@ -221,6 +221,14 @@ Find a resource
   - Empty catalog: "No resources yet", followed for members by "An admin needs to add rooms or equipment." and for admins by an "Add resource" action.
   - No results: "No resources match your filters" with "Clear filters".
   - Error: "We couldn't load resources" with "Try again".
+- **Settled while building M2:**
+  - The page `h1` is "Find a resource"; the nav link is "Resources".
+  - The search field is labelled "Search resources" with the caption "By name, location or tag". Every word typed must appear, ignoring case, in the name, location or a tag. Its clear button shows only while there is text.
+  - Minimum capacity offers Any, then 2, 4, 6, 8, 12 and 20 "or more". It applies to rooms only, because equipment has no capacity: with Type set to All, choosing a capacity hides equipment, and a caption says so. Choosing Equipment clears the capacity.
+  - "Clear filters" resets the type and capacity and also clears the search text, so it restores the full list.
+  - The "Filters" button's count covers only the type and capacity, not the search text. Below 768 px the filters open as a bottom sheet (the generic dialog does so below 640 px).
+  - An empty catalog shows only its empty state, with no search or filters. For an admin its "Add resource" action links to Manage resources, where adding arrives in M3.
+  - Focus: from the no-results state, "Clear filters" moves focus to the search field. After "Try again" succeeds, focus moves to the search field; if it fails again, focus moves to the error message.
 
 ### 5.4 Resource detail (`/resources/:id`)
 
@@ -242,6 +250,7 @@ Room A  [Room]          Block A, 2nd floor · Seats 8 · Projector, Whiteboard
 - **Date control:** a native date input (min = today in IST, max = today + 30), "Previous day" and "Next day" icon buttons, and "Today". A selection belongs to one date: changing the date clears it, and the summary warns about this beforehand ("Changing the date clears your selection").
 - **Fully booked day:** an empty state in the grid area, "No free times on Sat, 14 Nov", with "Next day".
 - **Unknown or inactive resource:** a "Resource not found" page with a link back to resources.
+- **Built in M2 (header only):** the back link, the name with its type tag, the location and seats, the tags and the description. Until M5 builds the date picker and slot grid, an info message says "Booking isn't available yet" instead of showing a placeholder grid. An admin who opens an inactive resource sees an "Inactive" lozenge. The page header stays on screen while the resource loads or fails, so focus placed on the `h1` after navigation survives. "Try again" moves focus to the `h1` on success, or to the message on failure.
 - **Mobile:**
   - One column: the header, a date row (44 px buttons around a flexible date input), then the slot groups in 4 columns.
   - The summary becomes a sticky bottom bar (`shadow-raised`, with safe-area padding) showing "2 slots · 10:00–11:00 IST" and a "Review" button.

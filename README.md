@@ -1,10 +1,10 @@
 # SlotBook
 
-SlotBook is a web app for booking meeting rooms and shared equipment within one organization. Members will find a resource, see its free 30-minute slots and book several in one all-or-nothing step, while admins maintain the resource catalog. The database itself will make double booking impossible.
+SlotBook is a web app for booking meeting rooms and shared equipment within one organization. Members can already find a resource; they will also see its free 30-minute slots and book several in one all-or-nothing step, while admins maintain the resource catalog. The database itself will make double booking impossible.
 
 ## Status
 
-Under construction, built one milestone at a time. **Milestones M0 (foundation) and M1 (accounts and roles) are done and verified.** Resource browsing, booking and admin tools are not built yet. The Resources, My bookings and Manage resources pages exist only as placeholders that say so. [PLAN.md](PLAN.md) has the scope, data model, API, milestones and the verification log.
+Under construction, built one milestone at a time. **Milestones M0 (foundation), M1 (accounts and roles) and M2 (resource catalog and discovery) are done and verified.** Booking and the admin tools are not built yet: the My bookings and Manage resources pages exist only as placeholders that say so, and a resource's page shows its details but no slots to book. [PLAN.md](PLAN.md) has the scope, data model, API, milestones and the verification log.
 
 ### Implemented
 
@@ -13,11 +13,15 @@ Under construction, built one milestone at a time. **Milestones M0 (foundation) 
   - Register (always as a member), sign in, sign out, and a session that survives a reload. The session is a JWT in an httpOnly cookie that scripts can't read.
   - Members and admins. Admin accounts come only from `npm run seed`, never from registration.
   - Signed-in-only pages that return you to where you were after signing in, a nav that shows "Manage resources" to admins only, and 403 and 404 pages.
-  - One error format for the whole API, and server tests (57) for the auth flow, roles and error handling.
+  - One error format for the whole API.
+- **Resource catalog and discovery (M2):**
+  - Signed-in users see the catalog as cards: rooms first, then equipment. Search by name, location or tag, filter by type and minimum capacity (all in the browser, so results appear as you type), and open a resource to see its location, capacity, tags and description.
+  - Loading, empty, no-results and error states, and a mobile layout where the filters open from a "Filters" button.
+  - `npm run seed` also creates 8 demo resources (rooms and equipment, including projectors). It is demo data in the database, not sample data baked into the screens.
+  - Server tests (90 in total) cover the auth flow, roles, error handling and the catalog.
 
 ### Planned, not built
 
-- **M2:** browse and search resources, filter by type and capacity, and see a resource's details.
 - **M3:** admins add, edit, deactivate and reactivate resources.
 - **M4–M5:** availability on a 30-minute grid (08:00–20:00 IST) and atomic booking of 1–8 slots, with a unique index guarding against double booking.
 - **M6:** My bookings with cancellation, plus an admin view of all bookings.
@@ -38,7 +42,7 @@ You need **Node.js 22.11 or later** and a **MongoDB replica set**. A free [Mongo
    - `MONGODB_URI`: your connection string.
    - `JWT_SECRET`: at least 32 random characters. Generate one with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
    - `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_MEMBER_EMAIL`, `SEED_MEMBER_PASSWORD`: the demo accounts to create (passwords 8–72 characters).
-3. `npm run seed` creates the admin and member accounts from those values. It is safe to run again and never changes an existing account's password.
+3. `npm run seed` creates the admin and member accounts from those values, plus the demo resources. It is safe to run again: it never changes an existing account's password or overwrites an existing resource.
 4. In two terminals, run `npm run dev:server` (API on http://localhost:4000) and `npm run dev:client` (app on http://localhost:5173, which forwards `/api` to the API).
 5. Open http://localhost:5173 and sign in with a seeded account, or create a member account on the register page.
 
