@@ -9,6 +9,9 @@ async function main(): Promise<void> {
   const accounts = readSeedAccounts();
 
   await connectDatabase({ uri: database.MONGODB_URI, dbName: database.MONGODB_DB_NAME });
+  // The database's name only, never its address or credentials: enough to notice, before anything is written, that a
+  // forgotten variable made this the development database (a variable set in the shell beats .env one by one).
+  console.log(`Seeding database "${database.MONGODB_DB_NAME}"`);
   try {
     const results = await seedAccounts(accounts);
     console.log(`Seeded users: ${results.map(({ role, outcome }) => `${role} ${outcome}`).join(', ')}`);

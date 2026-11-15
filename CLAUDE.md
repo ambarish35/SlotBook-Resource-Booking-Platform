@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-SlotBook is a MERN app for booking meeting rooms and shared equipment within one organization. **Status: M0 (foundation), M1 (accounts and roles), M2 (resource catalog and discovery), M3 (admin resource management), M4 (booking engine, API only), M5 (slot grid and booking flow) and M6 (My bookings and cancellation) are done and verified. M7 (polish and release readiness) is done except its screen-reader checks, which need a person. M8 (deployment) is optional and not started; the app is not ready to deploy.**
+SlotBook is a MERN app for booking meeting rooms and shared equipment within one organization. **Status: M0 (foundation), M1 (accounts and roles), M2 (resource catalog and discovery), M3 (admin resource management), M4 (booking engine, API only), M5 (slot grid and booking flow) and M6 (My bookings and cancellation) are done and verified. M7 (polish and release readiness) is done except its screen-reader checks, which need a person. M8 (deployment) is prepared and verified locally in production mode (Express serves the built client on one origin; settings validated; security headers; a cross-site write check; sign-in rate limits) but NOT deployed: no host, no Atlas, nothing published. See DEPLOYMENT.md for what the owner must decide and supply.**
 
 ## Before implementing
 
@@ -29,7 +29,7 @@ Run these from the repo root. Each one ran successfully (M0 to M7, 2026-11-13 to
 | `npm run typecheck` | TypeScript checks for client and server |
 | `npm test` | Server tests (Vitest + Supertest on an in-memory MongoDB replica set) |
 | `npm run build` | Builds `client/dist` and `server/dist` |
-| `npm start` | Runs the built API from `server/dist` |
+| `npm start` | Runs the built API from `server/dist`; with `NODE_ENV=production` (and `TRUST_PROXY`) it also serves `client/dist` on the same origin |
 | `npm run seed` | Creates the admin and member accounts from the `SEED_*` variables, plus the 8 demo resources and 4 demo bookings; safe to run again (see PLAN.md §11, M1, M2 and M4 notes) |
 
 Development needs two terminals, one for `npm run dev:server` and one for `npm run dev:client`. The API won't start until `JWT_SECRET` is set in `.env`. The user may already have both running (ports 4000 and 5173): check before starting servers, never stop them, and run verification servers on other ports (see HANDOFF.md).
@@ -37,8 +37,9 @@ Development needs two terminals, one for `npm run dev:server` and one for `npm r
 ## Environment
 
 - Node.js 22.11 on the dev machine. Dependencies are pinned to majors that support it (PLAN.md D13).
-- `.env` lives at the repo root. The API reads `MONGODB_URI` (credentials inside) and `JWT_SECRET` (required, at least 32 characters), plus optional `MONGODB_DB_NAME` (default `slotbook`) and `PORT` (default 4000). `npm run seed` reads `MONGODB_URI` and the `SEED_*` variables listed in `.env.example`, but not `JWT_SECRET`. Real environment variables override `.env`.
+- `.env` lives at the repo root. The API reads `MONGODB_URI` (credentials inside) and `JWT_SECRET` (required, at least 32 characters), plus optional `MONGODB_DB_NAME` (default `slotbook`) and `PORT` (default 4000). In production (`NODE_ENV=production`) `TRUST_PROXY`, the number of reverse proxies in front (0 or 1), is required too (README, Production). `npm run seed` reads `MONGODB_URI` and the `SEED_*` variables listed in `.env.example`, but not `JWT_SECRET`. Real environment variables override `.env`.
 - MongoDB must be a replica set because bookings use transactions; the API refuses to start otherwise. Atlas only accepts IP addresses on the project's Network Access list. If the connection fails with a TLS "SSL alert 80" while DNS and TCP work, suspect that list first: this network uses more than one public IP (suspected cause of the earlier failure, not proven), so a single "current IP" entry may not be enough. Tests use the replica set from `mongodb-memory-server`.
+- **Production-mode checks run from a fresh export, never the repo root:** the server loads the repo-root `.env` for any variable that is not set, so a check that leaves a variable out (to test validation, say) would pick up the real one, connection string included. Export the staged files (`git checkout-index -a --prefix=<new empty folder>/`), build there, and pass throwaway values through the process environment (HANDOFF.md).
 - Never write real secret values (`JWT_SECRET`, `SEED_*` passwords, the connection string) into files or commands yourself; the user puts them in `.env`. For a local check, pass throwaway values through the process environment only.
 - Business times are IST and storage is UTC (PLAN.md §10).
 - Secrets live in `.env` and other `*.env` files, which git ignores. Keep `.env.example` current, with placeholders only.

@@ -76,6 +76,8 @@ export function RegisterPage() {
         const fromServer: FieldErrors = {};
         for (const field of FIELDS) fromServer[field] = error.fields[field];
         showFieldErrors(fromServer);
+      } else if (error instanceof ApiError && error.code === 'RATE_LIMITED') {
+        setFailure({ title: 'Too many attempts to create an account', text: `For safety, creating accounts is paused from this connection. Try again in ${error.waitPhrase}.` });
       } else {
         setFailure({ title: "We couldn't create your account", text: 'Check your connection and try again.' });
       }

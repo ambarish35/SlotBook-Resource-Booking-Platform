@@ -1,13 +1,13 @@
-# SlotBook — Session handoff (after M7)
+# SlotBook — Session handoff (after M8's preparation)
 
 Read [CLAUDE.md](CLAUDE.md), [PLAN.md](PLAN.md) and [DESIGN.md](DESIGN.md) first. This file only adds session context; if it ever disagrees with PLAN.md, PLAN.md wins.
 
 ## State
 
 - **Branch:** `main`.
-- **Pushed:** the user pushes (M5's commit `20bfd8e` was pushed by them). Run `git status -sb` to see what isn't pushed; M6's `9cdfad7` and M7's commit aren't, unless that says otherwise.
+- **Pushed:** the user pushes (M5's commit `20bfd8e` was pushed by them). Run `git status -sb` to see what isn't pushed; M6's `9cdfad7`, M7's `048c3e0` and M8's commit aren't, unless that says otherwise.
 - **Working tree:** clean after each commit, apart from ignored local files (`.env`, other `*.env` files, `node_modules/`, `dist/`).
-- **Milestones:** M0, M1 and M2 are done and verified, each including a check against Atlas. M3, M4, M5 and M6 are done and verified on an in-memory replica set only, by choice: nothing was written to Atlas for them. **M7 is done except its screen-reader checks**, which need a person (script in PLAN.md §12), and it also ran on an in-memory replica set only. M8 (optional deployment) hasn't started; begin it only when the user asks. **The application is not ready to deploy**: the API doesn't serve the built client (README, "Running a built copy").
+- **Milestones:** M0, M1 and M2 are done and verified, each including a check against Atlas. M3, M4, M5 and M6 are done and verified on an in-memory replica set only, by choice: nothing was written to Atlas for them. **M7 is done except its screen-reader checks**, which need a person (script in PLAN.md §12), and it also ran on an in-memory replica set only. **M8 (deployment) is prepared and verified locally in production mode, and not deployed**: nothing was published, no host or Atlas was touched, and the owner's decisions are open (DEPLOYMENT.md lists them). Don't deploy, push, create a resource or spend money unless the user asks.
 
 ## Environment (already set up)
 
@@ -27,7 +27,7 @@ Read [CLAUDE.md](CLAUDE.md), [PLAN.md](PLAN.md) and [DESIGN.md](DESIGN.md) first
 - `src/config.ts` loads the repo-root `.env` with `process.loadEnvFile` (variables already in the environment win) and validates with Zod. Error messages name variables, never their values.
 - `src/db.ts`: `connectDatabase()` connects, checks with `hello` for a replica set or `mongos`, runs a read-only test transaction, then calls `createIndexes()` for every registered model. Every failure throws `DatabaseStartupError` with credentials redacted.
 - `src/index.ts` starts in the order config → database → listen. Any failure prints `SlotBook API failed to start: …` and exits with code 1. SIGINT and SIGTERM shut it down cleanly.
-- `GET /api/health` returns 200 `{"status":"ok","db":"connected"}`, or 503 when the database is disconnected.
+- `GET /api/health` returned 200 `{"status":"ok","db":"connected"}`, or 503 when the database was disconnected. **Since M8 that is split:** `/api/health` is liveness (200 `{"status":"ok"}`, never touches the database) and `/api/ready` is readiness (200 `{"status":"ready","db":"connected"}` or 503).
 
 **Client (`client/`):** Vite 6 + React 19 + React Router 7; Tailwind v4 with the DESIGN.md tokens in `src/index.css` (`@theme`, with Tailwind's default colors and shadows cleared); the Vite dev server forwards `/api` to `localhost:4000`.
 
@@ -153,11 +153,24 @@ M7 is a verification milestone: most of its work is the checks in PLAN.md §11 a
 
 **What's left, and who can do it**
 - **The screen-reader pass** (PLAN.md §12 has a 7-step script): only a person can run it. Record the result in the manual-checks table there, and fix what it finds.
-- **M8 (optional): deployment.** Needs Express (or a proxy) to serve `client/dist` with a fallback to `index.html`, one origin for `/api`, HTTPS for the `Secure` cookie, a production Atlas database and a host. Not started; ask first (hosting is outside the allowlist's spirit and may cost money).
-- **Not in the plan, so not built:** CI, ESLint, analytics, rate limiting, security headers, client tests. Don't add them without asking.
+- **Deployment itself:** prepared in M8 (below), not done. The owner decides the host, plan, region, Atlas database and Network Access entry, and who gets which seeded password (DEPLOYMENT.md); a person must create the Atlas user and the Render Blueprint, and run the seed from their own machine.
+- **Not in the plan, so not built:** CI, ESLint, analytics, client tests. Don't add them without asking. (Rate limiting and security headers were on this list until M8, when the owner asked for them.)
 - **Known limits to keep accurate in the docs** (PLAN.md §14): the rare booking-retry 500, the 50-row lists, the browser clock behind "In progress", the grid being a snapshot, the unknown-outcome wording for lost answers and 5xx, tables at a doubled text size.
 
-**Not built yet:** M8 (optional), ESLint and CI.
+**Not built yet:** actually deploying, ESLint and CI.
+
+## What M8 implements (production setup; nothing deployed)
+
+PLAN.md §11 (M8), §7 (cross-site writes, limits, headers) and §9 (production) are the record; DEPLOYMENT.md is the runbook. In short:
+- **Server code** (`server/src/`): `middleware/client.ts` (`serveClient`: static files with immutable caching for `/assets`, `index.html` revalidated, an SPA fallback for GET/HEAD paths with no file extension that are not `/api`; `ensureClientBuild`), `middleware/security.ts` (`securityHeaders`, `noStore`, `refuseCrossSiteWrites`, the exported `CONTENT_SECURITY_POLICY`), `middleware/rate-limit.ts` (`createAttemptLimiter`, in memory, fixed window per address, at most 10 000 addresses, on the server clock), `config.ts` (`TRUST_PROXY`, required in production; `CLIENT_DIST_DIR`), `routes/auth.ts` (limits: 10 wrong passwords per 15 minutes, 10 registrations per hour; failures only for sign-in), `lib/errors.ts` (`RATE_LIMITED`, 429), `app.ts` (the order of everything: headers, health, `/api` no-store and the cross-site check, JSON, cookies, routers, `/api` 404, the client, a final JSON 404), `index.ts` (production wiring), `scripts/seed.ts` (prints the database's name first).
+- **Client:** `ApiError.waitPhrase`, and the 429 messages in `LoginPage` and `RegisterPage`.
+- **Config and docs:** `render.yaml` (a Blueprint for one free Render web service: build `npm ci --include=dev && npm run build`, start `npm start`, health check `/api/health`, `NODE_ENV=production`, `TRUST_PROXY=1`, `MONGODB_URI` as `sync: false`, `JWT_SECRET` generated by Render), `.env.example` (production lines, commented), DEPLOYMENT.md, README "Production".
+- **Tests:** 398 (was 346): `security`, `client-hosting`, `rate-limit`, production cases in `config`, a rewritten `health`. `test/helpers.ts`'s `TEST_SESSION` carries `authLimits` that are out of the way, because most files make dozens of registrations and wrong passwords from one address through one app; `rate-limit.test.ts` is where the real limits (and the defaults) are tested.
+- **Things that bit:**
+  - A regex written inside a template string in a patch script lost its backslash (`\d` became `d`), so `TRUST_PROXY=0` was refused; the test caught it. Write regexes with the Edit tool, or use `[0-9]`.
+  - The `/api/resources/...` and `/api/bookings` routers ask for a session before anything else, so an unknown sub-path or a preflight there is a 401 in the envelope, not a 404. That is the behavior from before M8.
+  - `SameSite=Lax` doesn't separate ports or subdomains of one site. A form on another `localhost` port cancelled a signed-in member's booking until the `Sec-Fetch-Site` / `Origin` check existed (PLAN.md M8).
+- **How it was verified** (`m8-prod.mjs` in the scratchpad, not in the repo): a **fresh export of the staged files** with no `.env` (the server loads the repo-root `.env` for any variable that is not set, so a check that omits a variable would otherwise pick up the real one), `NODE_ENV=production npm ci --include=dev` and `npm run build` there, an in-memory replica set, `npm run seed` through the real CLI, `npm prune --omit=dev`, then `npm start` in production mode four times (one for the browser journey, one with `TRUST_PROXY=1`, two for the rate-limit checks) and headless Edge on `http://localhost:4100`. The forged posts were served by a throwaway page on `127.0.0.1:4190` (another site) and `localhost:4191` (same site, another origin). Deleting that export's `node_modules` takes a while: remove it by hand afterwards.
 
 ## Checks that passed
 
@@ -170,7 +183,9 @@ PLAN.md §12 has the full log with details. In short:
 | The README followed step by step in a fresh export (throwaway values, in-memory replica set) | Pass (2026-11-15), 18/18: `npm ci` (0 vulnerabilities), unfilled `.env` refused, seed twice, `npm run dev:server`, `npm start`, the production cookie, the client in a browser. `npm audit` 0 vulnerabilities |
 | M6 browser script re-run on the final code | Pass (2026-11-15), 161/161 |
 | M5 browser script re-run on the final code | 218/219 on the full run; the one failure was a missing wait in the script (the date field follows the address a frame later), and that scenario then passed twice, 15/15 |
-| Screen reader (Narrator or NVDA) | **Not run.** A script for a person is in PLAN.md §12 |
+| Screen reader (Narrator or NVDA) | **Not run.** A script for a person is in PLAN.md §12. M7's check stays pending; nothing in M8 replaces it |
+| M8 production-mode run (a fresh export, `NODE_ENV=production`, in-memory replica set, headless Edge on one origin): 76/76 | Pass (2026-11-15). The build as `render.yaml` says it, start-up validation, nothing seeded by starting, seed by command, `npm start` also with production dependencies only, health and readiness, static files and deep links, JSON API 404s, headers and the CSP, no CORS, the proxy-trust cases, the whole member journey in a browser, a real forged cancellation from another site and from another origin of the same site, the rate limit as a person meets it, a search of the build and logs for secrets, readiness against health when the database stops |
+| The same forged cancellation with the cross-site check switched off in the scratch copy | The same-site one **cancelled the booking** (the cross-site one got 401 from `SameSite=Lax`). So the check is what protects against a same-site page |
 | M6 browser acceptance (headless Edge, Vite client plus the built API, in-memory replica set, the server's and the pages' clocks movable together): 161/161 on the final code | Pass (2026-11-15). Member and admin lists, desktop and 375 px, filters and states, cancelling (pending, success, 409, 404, another 4xx, a lost answer before and after the server committed, a refresh that fails, a 500, session expiry), an admin cancelling a member's booking, a booking starting and ending while the page is open, keyboard only, a deactivated resource's and a removed account's bookings, and the booking dialog's unknown-outcome wording. The scripts are in the scratchpad, not the repo |
 | M5 browser script re-run on the changed code (`ResourceBooking`, `toRanges`' type) | Pass (2026-11-15), 219/219; one expectation changed on purpose (a 500 no longer says "Nothing was booked") |
 | M5 browser acceptance (headless Edge, Vite client plus the built API, in-memory replica set, server clock pinned): 219/219 on the final code; the first 212 checks had passed twice in a row before the 400 and 404 scenario and a one-line wording fix were added | Pass (2026-11-15). Desktop and 375 px phone, a two-member conflict on both, keyboard only, failures including a 400 and a 404 from the booking request, session expiry, day states, IST not the browser's zone. The scripts are in the scratchpad, not the repo |
@@ -210,7 +225,8 @@ npm run dev:server        # API -> http://localhost:4000 (needs JWT_SECRET in .e
 npm run dev:client        # app -> http://localhost:5173 (forwards /api to :4000)
 
 # Verify while both are running
-curl -s http://localhost:4000/api/health   # {"status":"ok","db":"connected"}
+curl -s http://localhost:4000/api/health   # {"status":"ok"}  (liveness)
+curl -s http://localhost:4000/api/ready    # {"status":"ready","db":"connected"}  (readiness; 503 without the database)
 curl -s http://localhost:5173/api/health   # same response, through the proxy
 
 # Built API
@@ -263,13 +279,13 @@ git diff --staged | node -e "const{parseEnv}=require('node:util');const e=parseE
 - **Writing scripts from Git Bash:** `python` here is the Windows launcher and hangs, so use `node`. A `\\r` inside a heredoc script can arrive as a real carriage return; build such strings with `String.fromCharCode`.
 - **Never put backticks in a double-quoted shell string.** Bash runs what is between them. During M4 a README edit passed as `node -e "…"` with `npm run seed` in Markdown backticks made bash execute the real seed against the real `.env`; it failed at the connection step, before it read or wrote anything, so nothing reached Atlas. Edit docs with the Edit tool, put scripts in files, or use single-quoted heredocs.
 - **Windows line endings:** `core.autocrlf` is true, so git prints "LF will be replaced by CRLF" warnings. The files in the repo are LF; ignore the warnings.
-- **README:** current through M7, including its final pass (PLAN.md §11). Update its status, feature list and "Known limits" with any later change, and keep its "not ready to deploy" statement true until M8 is done and verified.
+- **README:** current through M8's preparation (PLAN.md §11). Update its status, feature list, "Known limits" and "Production" with any later change, and keep its statement that nothing is deployed true until someone deploys and verifies it.
 - **Test scope for a milestone:** use an isolated database for anything that changes data, and don't re-run Atlas connectivity checks, mutation checks or Atlas writes just to repeat coverage the isolated tests already give. The user asked for this at the start of M3.
 
-## Next: M8 (optional), or the screen-reader pass
+## Next: the owner's decisions, and the screen-reader pass
 
-Don't start either unless the user asks. M7's code and checks are done (see "What M7 changed" above and PLAN.md §11 and §12). What remains is the human screen-reader pass (a script is in PLAN.md §12) and, if wanted, M8 (deployment; PLAN.md §11). Before any browser run:
-- **Disk:** read "Headless Edge downloads and unpacks an update on every fresh profile" above, and measure `Get-PSDrive C` and TEMP before and after. M7 saw free space on C: fall from 20.07 to 18.31 GB with nothing of mine left behind and nothing moving while idle (PLAN.md §12, "Disk space"): the cause isn't known, so keep measuring.
+Don't start anything unless the user asks. The code and checks for M8's preparation are done (see "What M8 implements" above and PLAN.md §11 and §12). What remains is a person's: the decisions and values in DEPLOYMENT.md, then running its runbook (Atlas, the Render Blueprint, the seed from their own machine, the smoke test), and the screen-reader pass (a script is in PLAN.md §12). Before any browser run:
+- **Disk:** read "Headless Edge downloads and unpacks an update on every fresh profile" above, and measure `Get-PSDrive C` and TEMP before and after. M7 saw free space on C: fall from 20.07 to 18.31 GB, and M8 from 18.74 to 15.43 GB, each time with nothing of mine left behind and nothing moving while idle (PLAN.md §12, "Disk space"): the cause isn't known (Windows' installer and update areas are the likeliest, unproven), C: is about 94% used, so keep measuring and tell the user if it gets low. MongoDB refuses writes under about 500 MB free.
 - **Scratch folders:** deleting a freshly installed `node_modules` with `fs.rmSync` from inside a long script can take minutes on Windows and cut off the script's summary; delete such a folder by hand afterwards, with a path you created. A shell `rm -rf` of a drive-root folder is refused by the tool's safety check: keep scratch work inside the scratchpad folder.
 - **Measuring accessibility without adding a dependency:** axe-core 4.10.2 was installed with `npm install axe-core@4.10.2 --ignore-scripts` in a scratch folder outside the repo (it isn't a project dependency; the allowlist is unchanged) and injected into each page with `Page.addScriptToEvaluateOnNewDocument`, then `axe.run` with the tags wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa and best-practice. Always probe it with a deliberate violation first, so "none found" means something.
 - **200% zoom versus 200% text size:** zoom is `Emulation.setDeviceMetricsOverride` with a 640 × 450 CSS px viewport at device scale factor 2; text size is `document.documentElement.style.fontSize = '200%'` at 1280, 1024 and 768 px. Both are needed; they fail differently (DESIGN.md §7).

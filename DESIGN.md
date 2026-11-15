@@ -194,6 +194,7 @@ Neutral means a `surface-subtle` background with `fg-secondary` text. Badges are
   - **Sign in:** Email, Password, a full-width "Sign in" button, and a "Create an account" link.
   - **Register:** Name, Email, Password (caption "At least 8 characters"), and "Create account".
 - Wrong credentials show the danger message "Email or password is incorrect." above the fields, and focus moves to it.
+- **Too many attempts (M8).** After ten wrong passwords from one address in 15 minutes the API answers 429, and the sign-in page shows the danger message "Too many sign-in attempts" with "For safety, signing in is paused from this connection. Try again in about 12 minutes." (the wait comes from the API, rounded up: "a minute", "about N minutes", or "a few minutes" if it isn't known), with focus on it. The right password is refused too while the pause lasts. Registration says "Too many attempts to create an account" in the same way. The wording says nothing about whose account or which password, and the form keeps what was typed.
 - **Mobile:** the card fills the width inside the 16 px gutters.
 
 ### 5.3 Resource discovery (`/resources`)

@@ -9,6 +9,7 @@ export type ErrorCode =
   | 'NAME_TAKEN'
   | 'SLOT_UNAVAILABLE'
   | 'BOOKING_NOT_CANCELLABLE'
+  | 'RATE_LIMITED'
   | 'INTERNAL_ERROR';
 
 /** The JSON body of every error response: `{ "error": { "code", "message", "details"? } }`. */
@@ -67,3 +68,7 @@ export const slotUnavailable = (slots: UnavailableSlot[]) =>
   );
 
 export const bookingNotCancellable = (message: string) => new AppError(409, 'BOOKING_NOT_CANCELLABLE', message);
+
+/** 429 for too many failed sign-ins or too many registrations from one address. `details.retryAfterSeconds` says how long to wait. */
+export const tooManyAttempts = (retryAfterSeconds: number) =>
+  new AppError(429, 'RATE_LIMITED', 'Too many attempts. Wait a few minutes and try again.', { retryAfterSeconds });

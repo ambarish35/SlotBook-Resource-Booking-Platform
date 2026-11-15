@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { MongoMemoryReplSet, MongoMemoryServer } from 'mongodb-memory-server';
 import type request from 'supertest';
 import { expect } from 'vitest';
+import type { AppOptions } from '../src/app.js';
 import { connectDatabase, disconnectDatabase } from '../src/db.js';
 import { SESSION_COOKIE, type SessionOptions, signSessionToken } from '../src/lib/session.js';
 import { Booking } from '../src/models/Booking.js';
@@ -18,10 +19,16 @@ export function sessionCookie(res: request.Response): string {
   return entry.split(';')[0]!;
 }
 
-/** Session settings for tests. This secret exists only here and protects nothing. */
-export const TEST_SESSION: SessionOptions = {
+/**
+ * App and session settings for tests. This secret exists only here and protects nothing. The sign-in and registration
+ * limits are out of the way: most test files make dozens of registrations and wrong passwords from one address (the
+ * address of the test client) through one app. `rate-limit.test.ts` is where the real limits are tested.
+ */
+const NO_LIMIT = { windowMs: 1000, max: 1_000_000 };
+export const TEST_SESSION: AppOptions & SessionOptions = {
   jwtSecret: 'test-only-secret-0123456789-abcdefghij-klmnopqrst',
   secureCookies: false,
+  authLimits: { loginFailures: NO_LIMIT, registrations: NO_LIMIT },
 };
 
 /*

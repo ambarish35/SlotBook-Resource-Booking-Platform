@@ -67,6 +67,8 @@ export function LoginPage() {
     } catch (error) {
       if (error instanceof ApiError && error.code === 'INVALID_CREDENTIALS') {
         setFailure({ title: error.message, text: 'Check your details and try again.' });
+      } else if (error instanceof ApiError && error.code === 'RATE_LIMITED') {
+        setFailure({ title: 'Too many sign-in attempts', text: `For safety, signing in is paused from this connection. Try again in ${error.waitPhrase}.` });
       } else {
         setFailure({ title: "We couldn't sign you in", text: 'Check your connection and try again.' });
       }

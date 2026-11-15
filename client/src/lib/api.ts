@@ -6,9 +6,16 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
-    readonly details?: { fields?: Record<string, string>; slots?: unknown },
+    readonly details?: { fields?: Record<string, string>; slots?: unknown; retryAfterSeconds?: unknown },
   ) {
     super(message);
+  }
+
+  /** For a 429 RATE_LIMITED: how long to wait, in words, rounded up ("about 5 minutes"); a general phrase if unknown. */
+  get waitPhrase(): string {
+    const seconds = Number(this.details?.retryAfterSeconds);
+    if (!Number.isFinite(seconds) || seconds <= 0) return 'a few minutes';
+    return seconds <= 60 ? 'a minute' : `about ${Math.ceil(seconds / 60)} minutes`;
   }
 
   /** Per-field messages from a 400 VALIDATION_ERROR. */

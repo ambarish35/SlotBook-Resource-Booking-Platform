@@ -1,0 +1,32 @@
+# Render Blueprint for SlotBook: one Node web service that serves the API and the built client on one origin.
+# PREPARED, NOT DEPLOYED. Nothing happens until a Blueprint is created from this file in the Render dashboard.
+# DEPLOYMENT.md lists the decisions this file assumes and the values only you can supply.
+services:
+  - type: web
+    name: slotbook
+    runtime: node
+    # The free plan costs nothing; Render documents that it sleeps when idle and then needs a while (about a minute) to
+    # wake, which nobody has observed for this app. Change it if that matters.
+    plan: free
+    # NODE_ENV=production makes npm skip devDependencies, but the build needs TypeScript and Vite: include them.
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    # Liveness only (never touches the database). /api/ready is the readiness check.
+    healthCheckPath: /api/health
+    autoDeploy: false
+    envVars:
+      - key: NODE_VERSION
+        value: 22.11.0
+      - key: NODE_ENV
+        value: production
+      # Render puts exactly one proxy in front of the service.
+      - key: TRUST_PROXY
+        value: '1'
+      - key: MONGODB_DB_NAME
+        value: slotbook
+      # Secrets. `sync: false` leaves them out of this file: you enter MONGODB_URI in the dashboard, and Render
+      # generates JWT_SECRET (a random value you never have to see or store).
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true

@@ -6,11 +6,11 @@ SlotBook is a web app for booking meeting rooms and shared equipment within one 
 
 Built one milestone at a time. **Milestones M0 (foundation), M1 (accounts and roles), M2 (resource catalog and discovery), M3 (admin resource management), M4 (booking engine, API only), M5 (slot grid and booking flow) and M6 (My bookings and cancellation) are done and verified, and M7 (polish and release checks) is done except one check that needs a person: nobody has yet used the app with a screen reader.** The whole member and admin journey works in the app: find a resource, book, see the booking, cancel it, and the slots are free again.
 
-**Not ready to deploy as it stands.** Deployment is the optional milestone M8 and hasn't been started: the API doesn't serve the built client, so there is no production setup yet (see [Running a built copy](#running-a-built-copy-and-what-is-missing-for-deployment)). There is no CI either, and no analytics (both are out of scope, PLAN.md §3). [PLAN.md](PLAN.md) has the scope, data model, API, milestones and the verification log.
+**Production setup (M8): prepared and verified on a local machine, not deployed.** In production mode Express serves the built client and the API from one origin; the settings are validated at start-up; there are security headers, a check against forged cross-site writes, and a limit on wrong passwords and registrations. It has been run that way locally against an in-memory database (sign in, book, cancel, sign out, deep links, headers, cookies). It has **not** been run on a host or against Atlas, nothing was published, and some decisions (host, region, database, who gets which password) are the owner's: see [Production](#production) and [DEPLOYMENT.md](DEPLOYMENT.md). There is no CI and no analytics (both out of scope, PLAN.md §3). [PLAN.md](PLAN.md) has the scope, data model, API, milestones and the verification log.
 
 ### Implemented
 
-- **Foundation (M0):** an npm workspace with a React client and an Express API. The API refuses to start unless MongoDB is a replica set (booking will use transactions) and exposes `GET /api/health`. The client uses the design tokens from [DESIGN.md](DESIGN.md).
+- **Foundation (M0):** an npm workspace with a React client and an Express API. The API refuses to start unless MongoDB is a replica set (booking will use transactions) and exposes `GET /api/health` (is the process up) and `GET /api/ready` (is the database connected). The client uses the design tokens from [DESIGN.md](DESIGN.md).
 - **Accounts and roles (M1):**
   - Register (always as a member), sign in, sign out, and a session that survives a reload. The session is a JWT in an httpOnly cookie that scripts can't read.
   - Members and admins. Admin accounts come only from `npm run seed`, never from registration.
@@ -54,11 +54,19 @@ Built one milestone at a time. **Milestones M0 (foundation), M1 (accounts and ro
   - **Fixed on the way:** at a large text size the resource cards were squeezed into slivers and the top bar ran off the screen; the date field showed no focus ring of its own.
   - **Not checked:** with a screen reader (Narrator or NVDA), in Safari, or on real touch devices. The checks above are not a substitute for the first of these.
 
+- **Production setup (M8):**
+  - **One origin:** with `NODE_ENV=production`, `npm start` serves the built client and the API together. React Router deep links and reloads work (`/bookings?view=history` loads from the server), unknown `/api` paths are JSON 404s and never the page, and a missing asset is a plain 404. There is no CORS.
+  - **Start-up checks:** in production `MONGODB_URI`, `JWT_SECRET` and `TRUST_PROXY` (how many proxies sit in front) are required and validated, the built client must exist, and the error says which setting is wrong without printing a value. Nothing is seeded on start.
+  - **Security:** a strict content security policy and the usual companion headers; HSTS on HTTPS requests; a `Secure`, `HttpOnly`, `SameSite=Lax` cookie; a check that refuses writes claiming to come from another site or origin (tried with a real forged form: see PLAN.md M8, where a same-site page on another port cancelled a booking until this check existed); at most ten wrong passwords per 15 minutes and ten registrations per hour per address. No new dependency was added for any of it.
+  - **Health and readiness are separate:** `/api/health` says the process is up and never touches the database (what a host should check); `/api/ready` says the database is connected.
+  - **Prepared, not done:** `render.yaml` (one free Render web service) and [DEPLOYMENT.md](DEPLOYMENT.md) (decisions, values, runbook, smoke test).
+  - **Checked** from a fresh export of the code: the build command in `render.yaml`, `npm start` in production mode (also with only production dependencies installed), the whole member journey in a browser on one origin, a forged cancellation from another origin, the rate limit as a person meets it, and a search of the build and logs for secrets. **Not checked:** a real host, real HTTPS and a real proxy (simulated with headers), Atlas, and the screen reader.
+
 ### Planned, not built
 
-- **M8** (optional): deployment. Nothing for it exists yet.
+- **Going live:** the owner's step (DEPLOYMENT.md). Nothing is deployed.
 
-Deliberately out of scope for the MVP: approval workflows, recurring bookings, notifications, calendar sync, password reset, a user-management UI, analytics, CI, rate limiting and security headers (PLAN.md §3).
+Deliberately out of scope for the MVP: approval workflows, recurring bookings, notifications, calendar sync, password reset, a user-management UI, analytics and CI (PLAN.md §3).
 
 ### Known limits
 
@@ -68,6 +76,7 @@ Deliberately out of scope for the MVP: approval workflows, recurring bookings, n
 - When the answer to a booking or a cancellation is lost, or the server fails, the page says it can't tell whether it went through and offers a refresh. "Nothing was booked" or "cancelled" is only said after a definite refusal.
 - In very rare cases (a slot taken and freed three times in a row while one booking is being made) the API answers with a generic error. Nothing is booked, and the page words it like any other server failure.
 - With the text size doubled on a screen 768 to 1279 px wide, the tables scroll sideways inside their card instead of turning into cards (browser zoom to 200% does turn them into cards).
+- The rate limits live in one process's memory: a restart empties them, and a second instance would count separately.
 - More in PLAN.md §14.
 
 ## Stack
@@ -85,7 +94,7 @@ You need **Node.js 22.11 or later** and a **MongoDB replica set**. A free [Mongo
    - `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_MEMBER_EMAIL`, `SEED_MEMBER_PASSWORD`: the demo accounts to create (passwords 8–72 characters). Optional `SEED_ADMIN_NAME` and `SEED_MEMBER_NAME` set their display names (default "Admin" and "Member").
    - Optional: `MONGODB_DB_NAME` (default `slotbook`) and `PORT` (default 4000). Real environment variables win over `.env`.
 3. `npm run seed` creates the admin and member accounts from those values, plus 8 demo resources and 4 demo bookings for the next few days. It is safe to run again: it never changes an existing account's password or overwrites an existing resource, and it adds demo bookings only when the demo accounts have no upcoming bookings.
-4. In two terminals, run `npm run dev:server` (API on http://localhost:4000) and `npm run dev:client` (app on http://localhost:5173, which forwards `/api` to the API). `http://localhost:4000/api/health` answers `{"status":"ok","db":"connected"}` when the API is up.
+4. In two terminals, run `npm run dev:server` (API on http://localhost:4000) and `npm run dev:client` (app on http://localhost:5173, which forwards `/api` to the API). `http://localhost:4000/api/health` answers `{"status":"ok"}` when the API is up, and `/api/ready` answers `{"status":"ready","db":"connected"}` when it can reach the database.
 5. Open http://localhost:5173 and sign in with a seeded account (the values you chose in step 2), or create a member account on the register page. The seeded admin also sees Manage resources and, on My bookings, All members; accounts made on the register page are always members.
 
 | Command | What it does |
@@ -93,31 +102,47 @@ You need **Node.js 22.11 or later** and a **MongoDB replica set**. A free [Mongo
 | `npm run typecheck` | TypeScript checks for client and server |
 | `npm test` | Server tests on an in-memory MongoDB replica set (the first run downloads a MongoDB binary) |
 | `npm run build` | Builds `client/dist` and `server/dist` |
-| `npm start` | Runs the built API (the API only: see below) |
+| `npm start` | Runs the built API. With `NODE_ENV=production` it also serves the built client (see Production) |
 | `npm run seed` | Creates the demo accounts, resources and bookings (needs `MONGODB_URI` and the `SEED_*` values) |
 
-## Running a built copy, and what is missing for deployment
 
-`npm run build` followed by `npm start` runs the **API only**, on `PORT` (default 4000). It does not serve the client. `client/dist` holds static files that need a web server, and the API has no CORS support, so the browser has to reach the app and `/api` on **one origin**. A production setup therefore needs a reverse proxy (or a host that does the same) that serves `client/dist`, answers unknown paths with `index.html`, and forwards `/api` to the API. That setup isn't built or tested here: it is the optional milestone M8, so **the app is not ready to deploy yet**.
 
-What the API needs once it runs somewhere real:
+## Production
 
-| Variable | Required | Notes |
-|---|---|---|
-| `MONGODB_URI` | yes | A connection string for a **replica set** (Atlas is one). The API refuses to start on a standalone server |
-| `JWT_SECRET` | yes | At least 32 random characters, never reused from development. Changing it signs everyone out |
-| `NODE_ENV` | no | Defaults to `development`. Set it to `production` (see the cookie below) |
-| `PORT` | no | Defaults to 4000 |
-| `MONGODB_DB_NAME` | no | Defaults to `slotbook` |
+Production is **one Node process on one origin**: Express serves the API under `/api` and the built React client for every other path, behind the host's HTTPS proxy, with MongoDB Atlas as the database. [DEPLOYMENT.md](DEPLOYMENT.md) has the decisions, the runbook and a smoke test; `render.yaml` is the Blueprint for a free Render web service. **Nothing is deployed**, and it has only been run locally (see Status).
 
-- **Session cookie:** a signed token (HS256, 7 days) in a cookie that is `httpOnly`, `SameSite=Lax`, path `/`, and `Secure` when `NODE_ENV=production`. A `Secure` cookie is only stored over HTTPS (browsers make an exception for `localhost`), so a production copy must be served over HTTPS or sign-in won't stick. The flag comes from `NODE_ENV`, not from the request, so a proxy that ends HTTPS needs no extra setting.
-- **Database:** on start the API checks that MongoDB is a replica set, runs a test transaction and builds the indexes (including the unique one that prevents double booking) before it starts listening. With Atlas, the cluster's Network Access list must allow the host the API runs on. Run `npm run seed` once if you want the demo data.
-- **Health check:** `GET /api/health` returns 200 with `{"status":"ok","db":"connected"}`, or 503 when the database is not connected.
-- **Not included:** rate limiting, security headers, email verification, password reset, revoking a session token before it expires (a copied token works until it expires), CI, and monitoring (PLAN.md §3 and §14).
+The commands (the ones `render.yaml` uses):
+
+```
+npm ci --include=dev && npm run build     # --include=dev: with NODE_ENV=production npm would skip TypeScript and Vite
+npm start                                 # needs NODE_ENV=production and the variables below
+```
+
+| Variable | Required | In production | Checked at start-up |
+|---|---|---|---|
+| `NODE_ENV` | yes | `production` | Only `development`, `test` or `production`. `production` serves the built client, sets the cookie `Secure`, sends HSTS on HTTPS requests, and makes the next row mandatory |
+| `TRUST_PROXY` | **yes, in production** | How many reverse proxies sit in front of the API: `1` on Render, `0` if clients reach it directly | A whole number from 0 to 10. It has no default there: too few and every client shares one rate-limit budget, too many and a client can forge its address |
+| `MONGODB_URI` | yes | A connection string for a **replica set** (Atlas is one) | Must start with `mongodb://` or `mongodb+srv://`; the unfilled example is refused; a standalone server is refused |
+| `JWT_SECRET` | yes | At least 32 random characters, never reused from development. Changing it signs everyone out | At least 32 characters; the unfilled example is refused |
+| `MONGODB_DB_NAME` | no | Defaults to `slotbook` | |
+| `PORT` | no | Set by the host; defaults to 4000 | A whole number from 1 to 65535 |
+
+A setting that is missing or wrong stops the API from starting, with a message that names it and never prints its value. In production the API also stops if `client/dist` hasn't been built.
+
+- **Session cookie:** a signed token (HS256, 7 days) in a cookie that is `HttpOnly`, `SameSite=Lax`, path `/`, with no `Domain`, and `Secure` when `NODE_ENV=production`. A `Secure` cookie is only stored over HTTPS (browsers make an exception for `localhost`), so a production copy must be served over HTTPS or sign-in won't stick. The flag comes from `NODE_ENV`, not from the request.
+- **Behind a proxy:** `TRUST_PROXY` makes Express believe `X-Forwarded-For` and `X-Forwarded-Proto` from that many proxies and no further. It decides which address the rate limit counts and whether HSTS is sent.
+- **Forged writes:** `SameSite=Lax` alone doesn't stop a page on another port or a sibling subdomain of the same site, so every request that changes data is also refused with 403 when the browser says it came from another site (`Sec-Fetch-Site`; for a browser that doesn't send it, when `Origin` isn't the request's host). There is no CORS.
+- **Limits:** ten wrong passwords per 15 minutes and ten registrations per hour, per address, answered with 429 and `Retry-After`. Counted in the process's memory, so run one instance; nothing locks an account.
+- **Headers:** a content security policy that allows only the site's own files, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy`, `Permissions-Policy`, and `Strict-Transport-Security` on HTTPS requests. API responses are never cached.
+- **Seeding:** nothing seeds on start-up. `npm run seed` is run by a person, once, from their own machine (DEPLOYMENT.md says how to do it without touching the wrong database). It prints the database's name and counts, never a password.
+- **Health and readiness:** `GET /api/health` is liveness (the process is up; it never touches the database, so a host that restarts unhealthy instances doesn't do so over a database blip). `GET /api/ready` is readiness (200 when the database is connected, otherwise 503). Point a host's health check at `/api/health`.
+- **Database:** on start the API checks that MongoDB is a replica set, runs a test transaction and builds the indexes (including the unique one that prevents double booking) before it starts listening. With Atlas, the cluster's Network Access list must allow the host the API runs on. A free host has no fixed outbound address, so the list would have to allow any address, protected by TLS and the database user's password alone: a decision for the owner (DEPLOYMENT.md).
+- **Not included:** password change or reset, email verification, revoking a session token before it expires (a copied token works until it expires), account lockout, an access log, monitoring, response compression, CI (PLAN.md §3 and §14).
 - **Node.js:** 22.11 or later (`engines` in `package.json`). `package-lock.json` is committed.
 
 ## Documentation
 
+- [DEPLOYMENT.md](DEPLOYMENT.md): the production arrangement, the decisions and values needed from the owner, and the runbook.
 - [PLAN.md](PLAN.md): scope, data model, API, milestones and the verification log. It is the source of truth.
 - [DESIGN.md](DESIGN.md): design tokens, components, screens and states.
 - [CLAUDE.md](CLAUDE.md): working rules for coding agents.
