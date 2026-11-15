@@ -36,7 +36,12 @@ const router = createBrowserRouter([
               { path: 'resources/:id', element: <ResourceDetailPage /> },
               {
                 path: 'bookings',
-                element: <PlaceholderPage title="My bookings" note="Booking isn't built yet. It arrives in a later milestone." />,
+                element: (
+                  <PlaceholderPage
+                    title="My bookings"
+                    note="The list of your bookings isn't built yet. Bookings you make from a resource's page are saved, and will appear here once it is."
+                  />
+                ),
               },
               {
                 element: <RequireAdmin />,

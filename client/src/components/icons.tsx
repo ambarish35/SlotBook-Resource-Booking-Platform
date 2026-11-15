@@ -69,3 +69,22 @@ export const CloseIcon = (props: IconProps) => (
     <path d="m5 5 10 10M15 5 5 15" />
   </Icon>
 );
+
+/** A bare check mark, for a selected slot (the circled CheckIcon belongs to success messages). */
+export const TickIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="m4.5 10.5 3.5 3.5 7.5-8" />
+  </Icon>
+);
+
+export const ChevronLeftIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="m12 5-5 5 5 5" />
+  </Icon>
+);
+
+export const ChevronRightIcon = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="m8 5 5 5-5 5" />
+  </Icon>
+);

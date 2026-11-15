@@ -1,20 +1,20 @@
-# SlotBook — Session handoff (after M4)
+# SlotBook — Session handoff (after M5)
 
 Read [CLAUDE.md](CLAUDE.md), [PLAN.md](PLAN.md) and [DESIGN.md](DESIGN.md) first. This file only adds session context; if it ever disagrees with PLAN.md, PLAN.md wins.
 
 ## State
 
 - **Branch:** `main`.
-- **Pushed:** the user pushes (M3's commit `9a1e80d` was pushed by them). Run `git status -sb` to see what isn't pushed; M4's commit isn't, unless that says otherwise.
+- **Pushed:** the user pushes (M4's commit `379706a` was pushed by them). Run `git status -sb` to see what isn't pushed; M5's commit isn't, unless that says otherwise.
 - **Working tree:** clean after each commit, apart from ignored local files (`.env`, other `*.env` files, `node_modules/`, `dist/`).
-- **Milestones:** M0, M1 and M2 are done and verified, each including a check against Atlas. M3 and M4 are done and verified on an in-memory replica set only, by choice: nothing was written to Atlas for them. M5 hasn't started; begin it only when the user asks.
+- **Milestones:** M0, M1 and M2 are done and verified, each including a check against Atlas. M3, M4 and M5 are done and verified on an in-memory replica set only, by choice: nothing was written to Atlas for them. M6 hasn't started; begin it only when the user asks.
 
 ## Environment (already set up)
 
 - The user's `.env` holds `MONGODB_URI`, `JWT_SECRET` and the four required `SEED_*` variables. The API needs `JWT_SECRET` to start. Only variable names were ever inspected; never print the values.
 - **Atlas holds** 2 users (the seeded admin and member) and the 8 demo resources, with the unique and compound indexes for both collections (checked in M1 and M2). M3 changed none of that, so the first real edit through the Manage resources page will be the first write to Atlas through those endpoints.
 - **M4 adds two collections, `bookings` and `slot_reservations`, and four indexes** (PLAN.md §5). The API builds them at startup, before it starts listening. The user's `tsx watch` dev API restarted on the M4 code during the session and answered `/api/health` with `db: connected` afterwards, so the collections and indexes were almost certainly created in Atlas then. That is inferred; nobody looked at Atlas. **No demo bookings are in Atlas** until the user runs `npm run seed` (it now creates 4, dated from the day it runs).
-- **The user's own dev servers may be running** on ports 4000 (`tsx watch` API, against Atlas) and 5173 (Vite). They were at the start of M2 and M3, and they restart on source edits, so they also build indexes in Atlas at startup (this is how the empty `resources` collection appeared in Atlas before the M2 seed). Never stop them. Check the ports before starting servers.
+- **The user's own dev servers may be running** on ports 4000 (`tsx watch` API, against Atlas) and 5173 (Vite). They were at the start of M2 and M3, and they restart on source edits, so they also build indexes in Atlas at startup (this is how the empty `resources` collection appeared in Atlas before the M2 seed). They weren't running during M5. Never stop them. Check the ports before starting servers.
 - **Running verification servers without touching those:**
   - Use an in-memory replica set for the database (`mongodb-memory-server`, started from a short script), and run the built API with `PORT=4100`, a throwaway `JWT_SECRET` and `MONGODB_URI` in the process environment only.
   - Vite's proxy target is fixed at `http://localhost:4000` in `client/vite.config.ts`. For another port, use a temporary untracked config that merges the base config with `server.port` and `server.proxy` changed (`vite --config <file>`), and delete it afterwards. Don't commit it.
@@ -101,7 +101,30 @@ Read [CLAUDE.md](CLAUDE.md), [PLAN.md](PLAN.md) and [DESIGN.md](DESIGN.md) first
 - Server: throw the `AppError` helpers; guard routes with `requireAuth` (and `requireAdmin`) passed into route factories; put `requireAdmin` before `validateBody`; validate bodies with `validateBody` and queries with `parseQuery`; save through a loaded document when a model hook holds a rule.
 - A `<Link>` that changes only the query string re-renders the page without moving focus to the `h1` (`RootLayout` reacts to the pathname only), which is what view switches want.
 
-**Not built yet:** every booking screen (the slot grid and booking flow, My bookings, the admin All members view), ESLint and CI. The booking API behind them is complete.
+## What M5 implements (client only; `server/` and its 346 tests are unchanged)
+
+The date picker, slot grid, selection summary, confirmation and conflict handling on `/resources/:id`. The decisions DESIGN.md left open are written down in its §5.6, "Settled while building M5"; read that before changing behavior.
+
+- **`lib/ist.ts`** (client IST helpers): `todayIst`, `istDateOf`, `isIstDate` (strict), `addDays`, `dateLabel` ("Sat, 14 Nov 2026", fixed English names), `shortDateLabel`, `timeLabel` (`Intl.DateTimeFormat` in `Asia/Kolkata`, 24-hour), `MAX_DAYS_AHEAD`. The browser's own zone is never used.
+- **`lib/bookings.ts`:** the types (`AvailabilitySlot`, `Availability`, `Booking`, `SlotConflict`), `MAX_SLOTS`, `conflictsOf(error)` (the slots of a 409 `SLOT_UNAVAILABLE`, or `null` for any other error) and `createBooking`. `ApiError.details` may now carry `slots`.
+- **`lib/slots.ts`:** pure logic, no React. `toRanges` merges consecutive selected slots (two are consecutive when one's `end` is the next one's `start`), `toggleSelection` (refuses a 9th), `removeRange`, `afterConflict`, `justTakenStarts`, `conflictNotice` (all the conflict wording), `durationLabel`, `slotCountLabel`, `defaultTabStop`, `SLOT_GROUPS`.
+- **`lib/useAvailability.ts`:** `useApiData` for one resource and date, plus `refresh()` (fetches again without a loading state; resolves `null` if the resource or date changed meanwhile) and `applyBooking(booking)` (marks a confirmed booking's slots from the 201 before any refresh). `lib/useMediaQuery.ts` gives the grid its column count.
+- **Components:** `DateControl`, `SlotGrid` with `SlotLegend`, `SelectionSummary` (the same data as a panel and as a bar, CSS shows one), `BookingDialog`, and `ResourceBooking`, which owns the state and the flow. `ResourceDetailPage` renders `ResourceBooking` for an active resource and a warning for an inactive one. `icons.tsx` gained `TickIcon`, `ChevronLeftIcon`, `ChevronRightIcon`. The My bookings placeholder's note in `main.tsx` was reworded.
+- **Things that bit during the build:**
+  - The selection belongs to one date. It is reset in the render in which the date changes, together with any warning or error. Ignoring state stored for another date isn't enough: going back to that date brought its old selection back, and the summary bar threw while the day reloaded (the flaky failure that found it is in PLAN.md §12).
+  - What is drawn and booked is `selection`: the selected starts that exist in the grid being shown. While a day reloads there are none.
+  - The booking response is the authority. After a 201 the grid is marked from it, then refreshed in the background; a failed refresh isn't an error. After a 409 the page refreshes the day, drops the slots the refusal named and the ones the grid no longer offers, keeps the rest, and explains it. While that refresh runs, slot presses are ignored and Review reads "Updating times…".
+  - A network failure on the booking request says the outcome is unknown rather than "Nothing was booked", because the server may have committed before the answer was lost.
+  - Typing a date in a native date field passes through other dates, so the field's message waits for a pause (about 0.6 s) or for the field to be left.
+- **No client unit tests, by plan** (PLAN.md §3 and §14). `lib/slots.ts` and `lib/ist.ts` are pure and are where tests would start, but a client test runner means adding Vitest to the client's dev dependencies, which is outside the allowlist: ask first.
+
+**Conventions to reuse in M6**
+- `Booking` in `lib/bookings.ts` is the shape of every booking response, lists included. A booking can hold slots that aren't consecutive (`slotStarts` of 10:00 and 14:00), so a row shows one range per run of slots. `toRanges` takes slots with `start` and `end`; for a booking, either build those from `slotStarts` (each slot ends 30 minutes after it starts) or add a small helper beside it.
+- Use `dateLabel(booking.date)` and `timeLabel(instant)` for display and `istDateOf` for any IST date; never `toLocaleString` or the browser's zone.
+- The success message on a resource's page links to `/bookings`, which is still a placeholder; make that link land on Upcoming with the new booking in it.
+- Cancelling uses the same dialog pattern as booking: `busy` while the request runs, a danger message inside the dialog for a failure, the page's own effect focusing the result message afterwards.
+
+**Not built yet:** My bookings and cancellation, the admin All members view (the APIs behind them are complete), ESLint and CI.
 
 ## Checks that passed
 
@@ -109,7 +132,8 @@ PLAN.md §12 has the full log with details. In short:
 
 | Check | Result |
 |---|---|
-| `npm run typecheck`, `npm test` (346/346), `npm run build` | Pass (2026-11-15, after M4) |
+| `npm run typecheck`, `npm test` (346/346), `npm run build` | Pass (2026-11-15, after M5; the tests are M4's, `server/` didn't change) |
+| M5 browser acceptance (headless Edge, Vite client plus the built API, in-memory replica set, server clock pinned): 219/219 on the final code; the first 212 checks had passed twice in a row before the 400 and 404 scenario and a one-line wording fix were added | Pass (2026-11-15). Desktop and 375 px phone, a two-member conflict on both, keyboard only, failures including a 400 and a 404 from the booking request, session expiry, day states, IST not the browser's zone. The scripts are in the scratchpad, not the repo |
 | M4: V1–V5 (and V6 after every booking test) on an in-memory replica set, with the time pinned | Pass. Ten members booking one slot at once: one 201, nine 409 |
 | M4: the built API over real HTTP and the real `npm run seed`, in-memory replica set (29/29) | Pass (2026-11-15). Startup built the unique slot index before the first request |
 | M4: ten simultaneous bookings with the unique index dropped in a throwaway database | All ten succeeded, every round; with the index exactly one. The index is the guarantee |
@@ -182,6 +206,9 @@ git diff --staged | node -e "const{parseEnv}=require('node:util');const e=parseE
   - These scripts weren't added to the repo, because end-to-end tests are deferred (PLAN.md §3). In dev, Vite serves modules by URL, so `import('/src/lib/api.ts')` from the page reaches the app's own module instance.
   - **Keep headless Edge visible to itself.** Launch it with `--disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-features=CalculateNativeWinOcclusion`, and send `Emulation.setFocusEmulationEnabled` and `Page.bringToFront`. Without them, after a few minutes the page reported `document.visibilityState` "hidden" and stopped producing animation frames; Chromium queues a `<dialog>`'s `close` event for the next frame, so Esc then left the dialog closed but React's state unchanged. That was the test browser, not an app bug. Give every CDP call a timeout, because a screenshot of a hidden page waits forever.
   - **Esc and user activation.** A page-dispatched or scripted click isn't a user activation. Esc's `cancel` event is cancelable only after a real one (a CDP mouse press or key press counts), and Chrome closes a dialog whose Esc was refused once if Esc comes again without a fresh activation. `Dialog` handles that by reopening itself while `busy`.
+  - **How the M5 run was built** (scratchpad files `m5-infra.mjs` and `m5-run.mjs`, not in the repo; rebuild them the same way). Everything ran in one Node process plus one Edge: an in-memory replica set with its own data directory (`slotbook-test-db-<pid>-…`, so the next test run's sweep covers it if the run is killed); the **built API in-process** (`server/dist/app.js` and `db.js`, behind a small `http` wrapper that logs requests), so `lib/clock.js`'s `setClock` could pin the server's time to 12:15 IST and move it mid-test; **Vite through its Node API** using the real `client/vite.config.ts` with only the port and proxy overridden (no temporary config file); one headless Edge with its own profile (`slotbook-edge-…`); and every member in a **separate browser context** (`Target.createBrowserContext`), so two sessions don't share cookies. Cleanup runs in reverse order on success, on failure and on SIGINT, and removes only what it started: by process id, and by the two directory names.
+  - **Request interception** (`Fetch.enable` on `*/api/*`) is how failures were made: `failRequest` for an unreachable server, `fulfillRequest` for a 500, a held request to test a pending state (release it with `continueRequest`), a delay to see the skeleton. Add a rule just before the click that sends the request.
+  - **Gotchas that cost time:** `Storage.clearCookies` for a browser context must be sent at browser level, not through the page's session. `Runtime.evaluate` can't return a DOM element ("Object reference chain is too long"): return `!!` of it. `Array.join` turns `null` into an empty string, so map to `String` first. Vite's dev server refuses a path with a malformed `%` escape on a direct load; reach such a page with `history.pushState` and a `popstate` event. Headless Edge's date field follows the system's region settings (day-first here), so find the segment order before typing digits. To test "today in IST" in another browser zone, use `Emulation.setTimezoneOverride` and a script from `Page.addScriptToEvaluateOnNewDocument` that wraps `Date` with an offset. A selector like `[aria-busy="true"]` can match the page's own loading skeleton first; wait for the one you mean.
   - **Clean up after every run (this filled the C: drive during M3; reviewed and tightened in M4).**
     - **Tests clean up after themselves now.** Every in-memory MongoDB the tests start gets its own data directory, `slotbook-test-db-<pid>-…` in TEMP (helpers in `test/helpers.ts`: `startTestDatabase`, `startMemoryReplSet`, `startMemoryStandalone`). `stop()` removes it, and so does a failed startup. Before M4, a setup that failed after the database had started leaked a `mongodb-memory-server` helper process and the directory; `startTestDatabase` now stops what it started before rethrowing.
     - **A killed run** (a crash, a timeout, Task Manager) can't clean up. Hard-killing a test worker, and vitest itself, showed that `mongodb-memory-server`'s helper still ends the `mongod` process, but the directory (about 200 MB) stays. The next test run deletes directories with this prefix whose pid no longer exists (`removeAbandonedDataDirs`); nothing else is ever touched.
@@ -191,17 +218,16 @@ git diff --staged | node -e "const{parseEnv}=require('node:util');const e=parseE
 - **Writing scripts from Git Bash:** `python` here is the Windows launcher and hangs, so use `node`. A `\\r` inside a heredoc script can arrive as a real carriage return; build such strings with `String.fromCharCode`.
 - **Never put backticks in a double-quoted shell string.** Bash runs what is between them. During M4 a README edit passed as `node -e "…"` with `npm run seed` in Markdown backticks made bash execute the real seed against the real `.env`; it failed at the connection step, before it read or wrote anything, so nothing reached Atlas. Edit docs with the Edit tool, put scripts in files, or use single-quoted heredocs.
 - **Windows line endings:** `core.autocrlf` is true, so git prints "LF will be replaced by CRLF" warnings. The files in the repo are LF; ignore the warnings.
-- **README:** current through M3. Its final pass belongs to M7 (PLAN.md §11).
+- **README:** current through M5. Its final pass belongs to M7 (PLAN.md §11).
 - **Test scope for a milestone:** use an isolated database for anything that changes data, and don't re-run Atlas connectivity checks, mutation checks or Atlas writes just to repeat coverage the isolated tests already give. The user asked for this at the start of M3.
 
-## Next milestone: M5, slot grid and booking flow
+## Next milestone: M6, My bookings and cancellation
 
-Don't start it unless the user asks. The checklist and acceptance are in PLAN.md §11 (M5), the screens in DESIGN.md §5.4 to §5.6 and §6 to §7. M5 is the first milestone since M3 that changes `client/`, so browser checks apply again: desktop and mobile sizes, the loading, fully booked, error, success and conflict states, a two-browser conflict run and keyboard-only use. The API it needs is built and tested; things M5 will meet:
+Don't start it unless the user asks. The checklist and acceptance are in PLAN.md §11 (M6), the screen in DESIGN.md §5.7 and §10. It changes `client/` only, so browser checks apply: desktop and mobile sizes, the loading, empty and error states, cancelling, and an admin cancelling a member's booking. The API it needs is built and tested; things M6 will meet:
 
-- **Use the contract as built** (PLAN.md §6): availability gives `start`, `end`, `label`, `status` and `mine` for each of the 24 slots, and the client sends the `start` strings back untouched. `past` wins over `unavailable`, so a booked slot that has started arrives as `past`; "Just taken" (DESIGN.md §5.6) is client-only.
-- **Conflicts:** 409 `SLOT_UNAVAILABLE` lists only the slots that are taken or have started (`details.slots`, each with `reason` `booked` or `past`). It books nothing, not even the free slots; DESIGN.md §5.6 says what to do with the rest of the selection. A booking for a date earlier than today, or beyond 30 days, is a 400 on `slotStarts`, a slot earlier today is a 409.
-- **The date control:** availability accepts today's date up to today + 30 (IST) and, for the picker's sake, an earlier date shows every slot as past. "Today" must be computed in IST on the client (PLAN.md §10); the API takes `YYYY-MM-DD`.
-- **Booking success** returns the booking with its resource name and location, which is what the "Booking confirmed · Room A · …" message needs, so no second request is needed for it.
-- An admin can look at an inactive resource's availability, but booking it is 404 for everyone. The grid should say so, or not offer the button, rather than let an admin discover it by failing.
-- Deactivating a resource doesn't cancel its bookings (PLAN.md D9, §14); the Deactivate dialog's text already says so.
-- The booking lists (`/api/bookings/mine`, `/api/bookings`) are for M6; they are built and tested but have no screen.
+- **Lists:** `GET /api/bookings/mine?view=upcoming|history` and, for admins, `GET /api/bookings?view=…` (each row has the member's name and email). They are bare arrays of at most 50 rows; show "Showing the latest 50" when exactly 50 arrive. `upcoming` is confirmed bookings that haven't ended, soonest first, so one in progress is in it: derive "In progress" on the client from `start <= now < end` and give it no Cancel action. `history` is cancelled bookings and confirmed ones that have ended, newest first.
+- **Cancelling:** `POST /api/bookings/:id/cancel` returns the whole booking (status `cancelled`, `cancelledAt` set, times unchanged, so History keeps the original times). 409 `BOOKING_NOT_CANCELLABLE` has no details, only a message that says whether it was already cancelled or has started: show it in the dialog and refresh the list. 404 is the same for an unknown id and another member's booking: DESIGN.md §5.7 says "We couldn't find this booking", then refresh. An admin may cancel any booking; a member only their own.
+- **The view switch** (Upcoming / History, and Mine / All members for admins) is made of links that change a query parameter (`ViewSwitch`, as on Manage resources).
+- **From M5:** the success message on a resource's page links to `/bookings`; the placeholder page there is what M6 replaces (its note is in `main.tsx`). After a cancellation the slots must show as available again on the resource page: check that in the browser. A booking made in M5 must appear under Upcoming with its resource, IST date and times, and "Confirmed" (PLAN.md §11, M6 acceptance).
+- **Demo data:** the 4 demo bookings exist in Atlas only after the user runs `npm run seed`. M6's checks should use an in-memory replica set and their own bookings, as M3 to M5 did, unless the user asks otherwise.
+- Deactivating a resource doesn't cancel its bookings (PLAN.md D9, §14): they stay in the lists, and an admin cancels them by hand.

@@ -1,10 +1,10 @@
 # SlotBook
 
-SlotBook is a web app for booking meeting rooms and shared equipment within one organization. Members can already find a resource and admins already maintain the catalog. The booking engine behind it exists as an API: free 30-minute slots, several slots booked in one all-or-nothing step, and cancellation, with the database itself making double booking impossible. Members will get screens for it next.
+SlotBook is a web app for booking meeting rooms and shared equipment within one organization. Members can find a resource, see its free 30-minute slots for any day up to 30 days ahead, and book several of them in one all-or-nothing step; admins maintain the catalog. The database itself makes double booking impossible. A member's list of bookings, and cancelling from it, come next.
 
 ## Status
 
-Under construction, built one milestone at a time. **Milestones M0 (foundation), M1 (accounts and roles), M2 (resource catalog and discovery) and M3 (admin resource management) and M4 (booking engine, API only) are done and verified.** There is no booking screen yet: the My bookings page exists only as a placeholder that says so, and a resource's page shows its details but no slots to book. [PLAN.md](PLAN.md) has the scope, data model, API, milestones and the verification log.
+Under construction, built one milestone at a time. **Milestones M0 (foundation), M1 (accounts and roles), M2 (resource catalog and discovery), M3 (admin resource management), M4 (booking engine, API only) and M5 (slot grid and booking flow) are done and verified.** You can book from a resource's page, but there is no list of your bookings yet: the My bookings page exists only as a placeholder that says so, so a booking can't be cancelled from the app until the next milestone. [PLAN.md](PLAN.md) has the scope, data model, API, milestones and the verification log.
 
 ### Implemented
 
@@ -30,10 +30,16 @@ Under construction, built one milestone at a time. **Milestones M0 (foundation),
   - `npm run seed` also creates 4 demo bookings (some belong to the demo member, some to the demo admin). It is demo data in the database.
   - Server tests (346 in total) cover the auth flow, roles, error handling, the catalog, admin resource management and the booking engine, including ten members booking the same slot at the same moment and getting exactly one booking.
 
+- **Slot grid and booking flow (M5):**
+  - **Choosing a time:** a resource's page has a date picker (today to 30 days ahead, with Previous day, Next day and Today) and the day's 24 slots, 08:00–19:30 IST, marked available, selected, booked, "Your booking" or past. All times are shown in IST, whatever the browser's time zone. The date is in the address, so a day can be bookmarked.
+  - **Selecting and reviewing:** pick 1–8 slots (not necessarily consecutive) on one day. A summary shows the ranges and the total, as a side panel on a wide screen and a sticky bar on a phone, and a confirmation step shows the resource, date and times before anything is sent.
+  - **Conflicts:** if someone else takes a slot while you are choosing, nothing is booked. The page refreshes the day, says which times were taken, keeps your other selections for editing, and shows the taken ones as "Just taken". The server's answer to the booking request decides, not the grid you were looking at.
+  - **Also:** it works from the keyboard alone (one Tab stop in the grid, arrow keys, Home and End, Space or Enter to select), has loading, error, and fully-booked states, and takes you to sign in and back to the same day if your session ends. An admin who opens an inactive resource sees a notice instead of a grid, because nobody can book it.
+  - **Checked** in headless Edge at desktop and phone sizes, including two members racing for the same slot. There are no automated tests for the screens (PLAN.md §3), and a screen reader hasn't been tried yet (M7).
+
 ### Planned, not built
 
-- **M5:** the screens for the booking engine: a date picker and slot grid on a resource's page, a review step and conflict handling.
-- **M6:** My bookings with cancellation, plus an admin view of all bookings.
+- **M6:** My bookings with cancellation, plus an admin view of all bookings. Until then a booking can be made but not cancelled in the app.
 - **M7:** polish, accessibility checks and a final pass over this README. **M8** (optional): deployment.
 
 Deliberately out of scope for the MVP: approval workflows, recurring bookings, notifications, calendar sync, password reset and a user-management UI (PLAN.md §3).

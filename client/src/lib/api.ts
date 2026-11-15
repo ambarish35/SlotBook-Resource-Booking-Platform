@@ -6,7 +6,7 @@ export class ApiError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
-    readonly details?: { fields?: Record<string, string> },
+    readonly details?: { fields?: Record<string, string>; slots?: unknown },
   ) {
     super(message);
   }

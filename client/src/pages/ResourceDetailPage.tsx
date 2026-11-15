@@ -4,6 +4,7 @@ import { Button, buttonClasses } from '../components/Button';
 import { Lozenge } from '../components/Lozenge';
 import { Message } from '../components/Message';
 import { PageHeader } from '../components/PageHeader';
+import { ResourceBooking } from '../components/ResourceBooking';
 import { SkeletonBlock } from '../components/Skeleton';
 import { Tag } from '../components/Tag';
 import { ApiError } from '../lib/api';
@@ -23,8 +24,8 @@ function BackLink() {
 }
 
 /**
- * One resource (DESIGN.md §5.4). This milestone shows its details only; choosing a date and booking
- * slots arrive in a later one, and the page says so rather than showing a fake grid (DESIGN.md §9).
+ * One resource (DESIGN.md §5.4): its details, then the date picker, slot grid and booking flow (ResourceBooking).
+ * An inactive resource, which only an admin can open, offers no booking: the API refuses it for everyone.
  * The page header stays mounted through every state, so focus placed on the `h1` after navigation survives loading.
  */
 export function ResourceDetailPage() {
@@ -111,9 +112,21 @@ export function ResourceDetailPage() {
             )}
             {resource.description ? <p className="mt-4 max-w-prose text-copy-14 text-fg">{resource.description}</p> : null}
           </section>
-          <Message variant="info" title="Booking isn't available yet">
-            Choosing a date and booking times arrives in a later milestone.
-          </Message>
+          {resource.isActive ? (
+            <ResourceBooking resource={resource} onResourceChanged={reload} />
+          ) : (
+            <Message
+              variant="warning"
+              title="This resource is inactive"
+              action={
+                <Link to="/admin/resources" className={buttonClasses('secondary')}>
+                  Manage resources
+                </Link>
+              }
+            >
+              Members can&apos;t see it and nobody can book it, so there are no times to show. Reactivate it to open it for booking.
+            </Message>
+          )}
         </div>
       ) : null}
     </>
