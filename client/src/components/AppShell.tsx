@@ -70,8 +70,9 @@ export function AppShell() {
           }
         }}
       >
-        <div className="mx-auto flex min-h-14 max-w-content items-center gap-6 px-4 md:px-6">
-          <Link to="/resources" className="rounded-md text-title-card text-fg">
+        {/* flex-wrap: at a large text size the nav and the user's name don't fit on one line, so the user group wraps below. */}
+        <div className="mx-auto flex min-h-14 max-w-content flex-wrap items-center gap-x-6 gap-y-1 px-4 md:px-6">
+          <Link to="/resources" className="inline-flex min-h-11 items-center rounded-md text-title-card text-fg md:min-h-0">
             SlotBook
           </Link>
 

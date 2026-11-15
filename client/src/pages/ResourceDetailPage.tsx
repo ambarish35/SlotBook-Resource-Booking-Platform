@@ -14,7 +14,7 @@ import { useRetryFocus } from '../lib/useRetryFocus';
 
 function BackLink() {
   return (
-    <Link to="/resources" className="mb-4 inline-flex min-h-11 items-center gap-1 rounded-md text-copy-14 text-accent underline md:min-h-0">
+    <Link to="/resources" className="mb-4 inline-flex min-h-11 items-center gap-1 rounded-md text-copy-14 text-accent underline md:min-h-6">
       <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
         <path d="m12 5-5 5 5 5" />
       </svg>

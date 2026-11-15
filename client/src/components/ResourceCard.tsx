@@ -16,7 +16,8 @@ export function ResourceCard({ resource }: { resource: Resource }) {
 
   return (
     <li className="flex flex-col rounded-lg border border-border bg-surface p-4 hover:border-border-strong md:p-5">
-      <div className="flex items-start justify-between gap-3">
+      {/* flex-wrap: in a narrow card the type tag drops under the name instead of squeezing the name to a sliver. */}
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
         <h2 className="min-w-0 text-title-card break-words text-fg">
           <Link to={href} className="rounded-sm hover:underline">
             {resource.name}

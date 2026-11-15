@@ -183,7 +183,7 @@ Neutral means a `surface-subtle` background with `fg-secondary` text. Badges are
   - Left: the text wordmark "SlotBook" in weight 600, linking to `/resources`.
   - Nav links: "Resources", "My bookings", and for admins "Manage resources". The current link has `fg` text, a 2 px `accent` underline and `aria-current="page"`.
   - Right: the user's name, an Admin lozenge when relevant, and "Sign out".
-- The first focusable element is a "Skip to main content" link.
+- The first focusable element is a "Skip to main content" link. It belongs to the app shell, so it is on every signed-in page; the sign-in and register pages have no repeated navigation to skip and no link.
 - On every route change, update `document.title` (for example "My bookings · SlotBook") and move focus to the page's `h1` (`tabindex="-1"`).
 - **Page header:** the `h1`, an optional one-line description, and the page's primary action, on the right on desktop or below the title on mobile.
 - **Mobile:** the wordmark and a "Menu" button (`aria-expanded`). The button opens the nav as a full-width list under the bar, and Sign out is included there.
@@ -214,7 +214,7 @@ Find a resource
 
 - Filters apply instantly in the browser, and focus stays on the control being changed. The result count is a `role="status"` region ("9 resources").
 - Minimum capacity is hidden when Type is Equipment.
-- **Grid:** 3 columns at ≥ 1024 px with the filters in a 240 px left column; 2 columns at 768–1023 px with the filters in a row above the results; 1 column below that.
+- **Grid:** 3 columns at ≥ 1024 px with the filters in a 240 px left column; 2 columns at 768–1023 px with the filters in a row above the results; 1 column below that. Those counts are caps: a column is also at least 16 rem wide (14 rem from 1024 px), so when the reader's text size is larger there are fewer, wider columns and the cards are never squeezed (the pixel breakpoints don't know about the text size). At the default text size nothing changes.
 - **Order:** rooms first, then equipment, each alphabetical.
 - **Mobile:** a full-width search field and a "Filters" button showing the count of active filters. The button opens a bottom sheet with the same controls plus "Show 9 results" and "Clear filters".
 - **States:**
@@ -403,6 +403,16 @@ If even one selected slot is unavailable, the server rejects the whole booking a
   - A failed page load uses `role="alert"`.
 - **Labels:** every input has a `<label>`; icon-only buttons have an `aria-label`; decorative SVGs are `aria-hidden="true"`; each page has one `h1` and properly ordered headings; the document sets `<html lang="en">`.
 - **Zoom:** everything works at 200% zoom and at 320 px wide, with no horizontal scrolling and no clipped text. Text containers never have fixed heights, and long names wrap instead of being truncated.
+
+**Settled while polishing (M7, §7 and §4):**
+
+- **Zoom and text size are different tests.** Browser zoom to 200% halves the width in CSS pixels, so the breakpoints respond and the phone layouts appear. Doubling only the text size (the browser's font-size setting) leaves the breakpoints where they are, so the layout has to cope on its own. Zoom was checked on all 20 screens and states (including the dialogs) and the text size on the main ones (sign in, discovery, a resource's page with and without a selection, My bookings in both scopes, Manage resources) at 1280, 1024 and 768 px: no horizontal scrolling of the page, no clipped text, no text squeezed to a sliver.
+- **What makes the text-size case work:** the resource grid's column counts are caps with a minimum width in `rem` (§5.3); the resource card's type tag wraps below its name instead of squeezing it; the top bar wraps, so the user's name and Sign out drop to a second line when the nav and the name don't fit; the wordmark link is 44 px high on a phone.
+- **What doesn't:** with the text size doubled on a screen 768 to 1279 px wide, the tables (My bookings, Manage resources) keep their columns and scroll sideways inside their card, the last resort §4 allows, instead of turning into cards. Browser zoom to 200% does turn them into cards.
+- **Focus rings.** Every Tab stop shows the global `accent` ring. A date field's focus sits on its day, month or year part and the field itself doesn't report `:focus-visible`, so it has the same ring through `:focus-within`.
+- **Focus after sign-in.** Focus is on the page heading, as after any navigation; Tab continues from there, down the page. The header's links are reached with Shift+Tab, or from the start of the page after the skip link.
+- **Motion.** None except the spinner, which animates only under `prefers-reduced-motion: no-preference`; there are no CSS transitions anywhere. Under "reduce" nothing on screen animates, and a button that is working still shows its spinner icon, still with its text ("Booking…").
+- **Page titles.** "Sign in", "Create an account", "Find a resource", the resource's name, "My bookings", "Manage resources", "You don't have access to this page", "Page not found" and "Resource not found", each followed by " · SlotBook". One `h1` per page and no skipped heading levels, checked on every screen.
 
 ## 8. States at a glance
 

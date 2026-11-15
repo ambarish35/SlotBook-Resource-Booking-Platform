@@ -15,7 +15,12 @@ import { type Resource, NO_FILTERS, activeFilterCount, countLabel, filterResourc
 import { useApiData } from '../lib/useApiData';
 import { useRetryFocus } from '../lib/useRetryFocus';
 
-const gridClasses = 'grid gap-4 md:grid-cols-2 lg:grid-cols-3';
+// DESIGN.md §5.3: 1 column, 2 from 768 px, 3 from 1024 px. The column counts are caps: each column is also at least
+// 16 rem (14 rem from 1024 px) wide, so when the reader's text size is larger the cards get fewer, wider columns instead
+// of being squeezed (the breakpoints are in pixels and don't know about the text size). `auto-fill` keeps a lone card
+// the width of one column.
+const gridClasses =
+  'grid gap-4 md:grid-cols-[repeat(auto-fill,minmax(min(100%,max(16rem,calc((100%_-_1rem)/2))),1fr))] lg:grid-cols-[repeat(auto-fill,minmax(min(100%,max(14rem,calc((100%_-_2rem)/3))),1fr))]';
 
 /** Placeholder cards shaped like resource cards while the list loads. */
 function LoadingCards() {

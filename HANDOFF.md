@@ -1,13 +1,13 @@
-# SlotBook — Session handoff (after M6)
+# SlotBook — Session handoff (after M7)
 
 Read [CLAUDE.md](CLAUDE.md), [PLAN.md](PLAN.md) and [DESIGN.md](DESIGN.md) first. This file only adds session context; if it ever disagrees with PLAN.md, PLAN.md wins.
 
 ## State
 
 - **Branch:** `main`.
-- **Pushed:** the user pushes (M5's commit `20bfd8e` was pushed by them). Run `git status -sb` to see what isn't pushed; M6's commit isn't, unless that says otherwise.
+- **Pushed:** the user pushes (M5's commit `20bfd8e` was pushed by them). Run `git status -sb` to see what isn't pushed; M6's `9cdfad7` and M7's commit aren't, unless that says otherwise.
 - **Working tree:** clean after each commit, apart from ignored local files (`.env`, other `*.env` files, `node_modules/`, `dist/`).
-- **Milestones:** M0, M1 and M2 are done and verified, each including a check against Atlas. M3, M4, M5 and M6 are done and verified on an in-memory replica set only, by choice: nothing was written to Atlas for them. M7 hasn't started; begin it only when the user asks.
+- **Milestones:** M0, M1 and M2 are done and verified, each including a check against Atlas. M3, M4, M5 and M6 are done and verified on an in-memory replica set only, by choice: nothing was written to Atlas for them. **M7 is done except its screen-reader checks**, which need a person (script in PLAN.md §12), and it also ran on an in-memory replica set only. M8 (optional deployment) hasn't started; begin it only when the user asks. **The application is not ready to deploy**: the API doesn't serve the built client (README, "Running a built copy").
 
 ## Environment (already set up)
 
@@ -142,11 +142,22 @@ My bookings at `/bookings`: Upcoming and History, the admin's Mine and All membe
   - A removed account's bookings come back as "Deleted account" with an empty email; the success message must not promise that it "will see it as Cancelled".
 - **No client unit tests, by plan.** `bookingRanges`, `phaseOf` and `bookingsSearch` are pure and are where tests would start, if a client test runner is ever allowed (Vitest in the client's dev dependencies is outside the allowlist: ask first).
 
-**Conventions to reuse in M7**
-- Page titles come from `PageHeader` (every page already has one); the skip link, focus after navigation and the `h1`'s `tabIndex` are in `AppShell`, `RootLayout` and `PageHeader`. M7's keyboard and screen-reader pass should start with the dialogs (booking, cancel, deactivate, resource form) and the live regions (the count lines, the one selection region).
-- Not yet tried by anyone: a screen reader (Narrator or NVDA), 200% zoom, `prefers-reduced-motion`, Safari, real touch devices. Everything so far was checked in headless Edge.
+## What M7 changed (client only, small; `server/` and its 346 tests are unchanged)
 
-**Not built yet:** M7 (polish and release checks), ESLint and CI, deployment (M8, optional).
+M7 is a verification milestone: most of its work is the checks in PLAN.md §11 and §12 and the README. The code changes it forced:
+- `ResourcesPage` grid: the column counts are caps with a `rem` minimum column width (`auto-fill` and `minmax(min(100%, max(16rem, …)), 1fr)`), so a larger text size gives fewer, wider columns. `ResourceCard`'s title row wraps. Default-size layout is unchanged (DESIGN.md §5.3).
+- `AppShell`: the top bar wraps at a large text size, and the wordmark link is 44 px high on a phone. `ResourceDetailPage`: the back link is at least 24 px high on desktop.
+- `index.css`: `input[type='date']:focus-within` gets the same ring as `:focus-visible`.
+- DESIGN.md "Settled while polishing (M7)" (end of §7) records zoom versus text size, what makes the text-size case work, the one known gap (tables scroll inside their card at a doubled text size on 768 to 1279 px), focus after sign-in, motion and the page titles.
+- README: status, a milestone-by-milestone feature list including M7, known limits, optional variables, "Running a built copy, and what is missing for deployment" (exact variables, cookie, replica set, health check, and the plain statement that the app is not ready to deploy).
+
+**What's left, and who can do it**
+- **The screen-reader pass** (PLAN.md §12 has a 7-step script): only a person can run it. Record the result in the manual-checks table there, and fix what it finds.
+- **M8 (optional): deployment.** Needs Express (or a proxy) to serve `client/dist` with a fallback to `index.html`, one origin for `/api`, HTTPS for the `Secure` cookie, a production Atlas database and a host. Not started; ask first (hosting is outside the allowlist's spirit and may cost money).
+- **Not in the plan, so not built:** CI, ESLint, analytics, rate limiting, security headers, client tests. Don't add them without asking.
+- **Known limits to keep accurate in the docs** (PLAN.md §14): the rare booking-retry 500, the 50-row lists, the browser clock behind "In progress", the grid being a snapshot, the unknown-outcome wording for lost answers and 5xx, tables at a doubled text size.
+
+**Not built yet:** M8 (optional), ESLint and CI.
 
 ## Checks that passed
 
@@ -154,7 +165,12 @@ PLAN.md §12 has the full log with details. In short:
 
 | Check | Result |
 |---|---|
-| `npm run typecheck`, `npm test` (346/346), `npm run build` | Pass (2026-11-15, after M6; the tests are M4's, `server/` didn't change) |
+| `npm run typecheck`, `npm test` (346/346), `npm run build` | Pass (2026-11-15, after M7; the tests are M4's, `server/` didn't change). Also in a fresh export of the staged files |
+| M7 browser run (headless Edge, Vite client plus the built API, in-memory replica set): 157/157 on the final code | Pass (2026-11-15). The end-to-end journey (admin adds a resource, a new member registers and books it, My bookings, cancel, slots free again); 20 screens and states at 1280, 375 and 200% zoom with axe-core (no violation), titles, headings, overflow, clipping and names; the text size doubled at 1280, 1024 and 768 px; keyboard-only member and admin journeys (92 Tab stops, all with a ring); reduced motion; console. The scripts are in the scratchpad, not the repo |
+| The README followed step by step in a fresh export (throwaway values, in-memory replica set) | Pass (2026-11-15), 18/18: `npm ci` (0 vulnerabilities), unfilled `.env` refused, seed twice, `npm run dev:server`, `npm start`, the production cookie, the client in a browser. `npm audit` 0 vulnerabilities |
+| M6 browser script re-run on the final code | Pass (2026-11-15), 161/161 |
+| M5 browser script re-run on the final code | 218/219 on the full run; the one failure was a missing wait in the script (the date field follows the address a frame later), and that scenario then passed twice, 15/15 |
+| Screen reader (Narrator or NVDA) | **Not run.** A script for a person is in PLAN.md §12 |
 | M6 browser acceptance (headless Edge, Vite client plus the built API, in-memory replica set, the server's and the pages' clocks movable together): 161/161 on the final code | Pass (2026-11-15). Member and admin lists, desktop and 375 px, filters and states, cancelling (pending, success, 409, 404, another 4xx, a lost answer before and after the server committed, a refresh that fails, a 500, session expiry), an admin cancelling a member's booking, a booking starting and ending while the page is open, keyboard only, a deactivated resource's and a removed account's bookings, and the booking dialog's unknown-outcome wording. The scripts are in the scratchpad, not the repo |
 | M5 browser script re-run on the changed code (`ResourceBooking`, `toRanges`' type) | Pass (2026-11-15), 219/219; one expectation changed on purpose (a 500 no longer says "Nothing was booked") |
 | M5 browser acceptance (headless Edge, Vite client plus the built API, in-memory replica set, server clock pinned): 219/219 on the final code; the first 212 checks had passed twice in a row before the 400 and 404 scenario and a one-line wording fix were added | Pass (2026-11-15). Desktop and 375 px phone, a two-member conflict on both, keyboard only, failures including a 400 and a 404 from the booking request, session expiry, day states, IST not the browser's zone. The scripts are in the scratchpad, not the repo |
@@ -247,16 +263,15 @@ git diff --staged | node -e "const{parseEnv}=require('node:util');const e=parseE
 - **Writing scripts from Git Bash:** `python` here is the Windows launcher and hangs, so use `node`. A `\\r` inside a heredoc script can arrive as a real carriage return; build such strings with `String.fromCharCode`.
 - **Never put backticks in a double-quoted shell string.** Bash runs what is between them. During M4 a README edit passed as `node -e "…"` with `npm run seed` in Markdown backticks made bash execute the real seed against the real `.env`; it failed at the connection step, before it read or wrote anything, so nothing reached Atlas. Edit docs with the Edit tool, put scripts in files, or use single-quoted heredocs.
 - **Windows line endings:** `core.autocrlf` is true, so git prints "LF will be replaced by CRLF" warnings. The files in the repo are LF; ignore the warnings.
-- **README:** current through M6. Its final pass belongs to M7 (PLAN.md §11).
+- **README:** current through M7, including its final pass (PLAN.md §11). Update its status, feature list and "Known limits" with any later change, and keep its "not ready to deploy" statement true until M8 is done and verified.
 - **Test scope for a milestone:** use an isolated database for anything that changes data, and don't re-run Atlas connectivity checks, mutation checks or Atlas writes just to repeat coverage the isolated tests already give. The user asked for this at the start of M3.
 
-## Next milestone: M7, polish and release readiness
+## Next: M8 (optional), or the screen-reader pass
 
-Don't start it unless the user asks. The checklist and acceptance are in PLAN.md §11 (M7). It is a pass over everything built, not a feature, so the checks are the work: every screen at 375 and 1280 px and at 200% zoom, keyboard-only and screen-reader (Narrator or NVDA) runs of the member and admin journeys, page titles, skip link, focus after navigation, reduced motion, a copy pass (sentence case, specific button labels), the README's final pass, and a full run of PLAN.md §12 with the results logged.
-
-- **What is already true:** every page sets its title through `PageHeader`; there is a skip link; focus moves to the `h1` after a route change; booking (M5) and cancelling (M6) were each run from the keyboard alone in headless Edge, and the forms of M1 to M3 were exercised with Enter and Esc, but nobody has done a full keyboard-only pass of the member and admin journeys; the 320, 375, 768 and 1024 px layouts were checked for the M5 and M6 screens (M2 and M3 have their own checks).
-- **What nobody has done:** a real screen reader, 200% zoom, `prefers-reduced-motion`, Safari and real touch devices; the console check on M1 to M6 journeys as one run (each milestone checked its own); a clean-clone run of the README's steps.
-- **Known copy and wording to look at:** the booking and cancellation messages are long by design (they say what is and isn't known); a copy pass may shorten them but must keep the rule that "nothing was booked" or "nothing was cancelled" is written only after a definite refusal (DESIGN.md §5.5 and §5.7).
-- **The clock behind "In progress"** is the browser's (PLAN.md §14). Fine for the MVP; if M7 wants it exact, the API would have to send its own time, which is a server change.
-- **Demo data:** the 4 demo bookings exist in Atlas only after the user runs `npm run seed`. Checks should still use an in-memory replica set and their own bookings unless the user asks otherwise.
-- **Test tooling:** read "Headless Edge downloads and unpacks an update on every fresh profile" above before starting any browser run, and check `Get-PSDrive C` and TEMP before and after.
+Don't start either unless the user asks. M7's code and checks are done (see "What M7 changed" above and PLAN.md §11 and §12). What remains is the human screen-reader pass (a script is in PLAN.md §12) and, if wanted, M8 (deployment; PLAN.md §11). Before any browser run:
+- **Disk:** read "Headless Edge downloads and unpacks an update on every fresh profile" above, and measure `Get-PSDrive C` and TEMP before and after. M7 saw free space on C: fall from 20.07 to 18.31 GB with nothing of mine left behind and nothing moving while idle (PLAN.md §12, "Disk space"): the cause isn't known, so keep measuring.
+- **Scratch folders:** deleting a freshly installed `node_modules` with `fs.rmSync` from inside a long script can take minutes on Windows and cut off the script's summary; delete such a folder by hand afterwards, with a path you created. A shell `rm -rf` of a drive-root folder is refused by the tool's safety check: keep scratch work inside the scratchpad folder.
+- **Measuring accessibility without adding a dependency:** axe-core 4.10.2 was installed with `npm install axe-core@4.10.2 --ignore-scripts` in a scratch folder outside the repo (it isn't a project dependency; the allowlist is unchanged) and injected into each page with `Page.addScriptToEvaluateOnNewDocument`, then `axe.run` with the tags wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa and best-practice. Always probe it with a deliberate violation first, so "none found" means something.
+- **200% zoom versus 200% text size:** zoom is `Emulation.setDeviceMetricsOverride` with a 640 × 450 CSS px viewport at device scale factor 2; text size is `document.documentElement.style.fontSize = '200%'` at 1280, 1024 and 768 px. Both are needed; they fail differently (DESIGN.md §7).
+- **Hidden elements in a measurement:** Tailwind's `sr-only` keeps its `clip-path: inset(50%)` but a padding class on the same element stops it being 1 px wide, so test the clip, not the size, and use plain string checks inside template strings (a regex with `\(` loses its backslash there).
+- **Fresh-copy check:** `git checkout-index -a --prefix=<new empty folder>/` after staging exports what a clone would hold; run the README's steps in it with throwaway values in the process environment and an in-memory replica set, never the real `.env`.

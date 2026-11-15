@@ -82,6 +82,13 @@
     outline-offset: 2px;
   }
 
+  /* Focus in a date field sits on one of its day, month or year parts, and the field itself doesn't report
+     :focus-visible, so it would show only the browser's own highlight of that part. This gives it the same ring. */
+  input[type='date']:focus-within {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
   /* The search field draws its own clear button, only while there is text (DESIGN.md §4 Inputs). */
   input[type='search']::-webkit-search-cancel-button,
   input[type='search']::-webkit-search-decoration {
