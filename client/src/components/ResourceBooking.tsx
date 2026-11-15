@@ -268,15 +268,20 @@ export function ResourceBooking({ resource, onResourceChanged }: ResourceBooking
           title: "We couldn't book these times",
           text: `${reason}${/[.!?]$/.test(reason) ? '' : '.'} Nothing was booked. Go back and choose again.`,
         });
-      } else if (error instanceof ApiError && error.status === 0) {
-        // The answer never arrived, so the booking may have gone through. Say so, and refresh so the grid shows it.
+      } else if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+        // Any other 4xx is the server refusing the request before it changed anything.
+        setFailure({ title: "We couldn't complete your booking", text: 'Nothing was booked. Try again.' });
+      } else {
+        // No answer, or a 5xx: neither says "no". The server may have committed before the answer was lost, or before it
+        // failed while building the reply, so don't claim nothing was booked. Refresh so the grid shows a booking that stood.
+        const noAnswer = !(error instanceof ApiError) || error.status === 0;
         setFailure({
           title: "We couldn't confirm your booking",
-          text: "We couldn't reach the server, so we can't tell if it went through. Check your connection and try again. If these times now show as Your booking, it did.",
+          text: noAnswer
+            ? "We couldn't reach the server, so we can't tell if it went through. Check your connection and try again. If these times now show as Your booking, it did."
+            : "The server ran into a problem, so we can't tell if it went through. Try again. If these times now show as Your booking, it did.",
         });
         availability.refresh().catch(() => undefined);
-      } else {
-        setFailure({ title: "We couldn't complete your booking", text: 'Nothing was booked. Try again.' });
       }
     } finally {
       submittingRef.current = false;

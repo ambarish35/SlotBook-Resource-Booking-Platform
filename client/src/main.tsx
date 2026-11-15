@@ -7,8 +7,8 @@ import { RootLayout } from './components/RootLayout';
 import { RedirectIfSignedIn, RequireAdmin, RequireAuth } from './components/RouteGuards';
 import { LoginPage } from './pages/LoginPage';
 import { ManageResourcesPage } from './pages/ManageResourcesPage';
+import { MyBookingsPage } from './pages/MyBookingsPage';
 import { NotFoundPage } from './pages/NotFoundPage';
-import { PlaceholderPage } from './pages/PlaceholderPage';
 import { ResourceDetailPage } from './pages/ResourceDetailPage';
 import { ResourcesPage } from './pages/ResourcesPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -34,15 +34,7 @@ const router = createBrowserRouter([
               { index: true, element: <Navigate to="/resources" replace /> },
               { path: 'resources', element: <ResourcesPage /> },
               { path: 'resources/:id', element: <ResourceDetailPage /> },
-              {
-                path: 'bookings',
-                element: (
-                  <PlaceholderPage
-                    title="My bookings"
-                    note="The list of your bookings isn't built yet. Bookings you make from a resource's page are saved, and will appear here once it is."
-                  />
-                ),
-              },
+              { path: 'bookings', element: <MyBookingsPage /> },
               {
                 element: <RequireAdmin />,
                 children: [

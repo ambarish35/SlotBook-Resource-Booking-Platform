@@ -1,10 +1,10 @@
 # SlotBook
 
-SlotBook is a web app for booking meeting rooms and shared equipment within one organization. Members can find a resource, see its free 30-minute slots for any day up to 30 days ahead, and book several of them in one all-or-nothing step; admins maintain the catalog. The database itself makes double booking impossible. A member's list of bookings, and cancelling from it, come next.
+SlotBook is a web app for booking meeting rooms and shared equipment within one organization. Members can find a resource, see its free 30-minute slots for any day up to 30 days ahead, book several of them in one all-or-nothing step, and see and cancel their bookings; admins maintain the catalog and can cancel anyone's booking. The database itself makes double booking impossible.
 
 ## Status
 
-Under construction, built one milestone at a time. **Milestones M0 (foundation), M1 (accounts and roles), M2 (resource catalog and discovery), M3 (admin resource management), M4 (booking engine, API only) and M5 (slot grid and booking flow) are done and verified.** You can book from a resource's page, but there is no list of your bookings yet: the My bookings page exists only as a placeholder that says so, so a booking can't be cancelled from the app until the next milestone. [PLAN.md](PLAN.md) has the scope, data model, API, milestones and the verification log.
+Under construction, built one milestone at a time. **Milestones M0 (foundation), M1 (accounts and roles), M2 (resource catalog and discovery), M3 (admin resource management), M4 (booking engine, API only), M5 (slot grid and booking flow) and M6 (My bookings and cancellation) are done and verified.** The whole member and admin journey now works in the app: find a resource, book, see the booking, cancel it, and the slots are free again. What is left is polish and release checks (M7). [PLAN.md](PLAN.md) has the scope, data model, API, milestones and the verification log.
 
 ### Implemented
 
@@ -37,10 +37,15 @@ Under construction, built one milestone at a time. **Milestones M0 (foundation),
   - **Also:** it works from the keyboard alone (one Tab stop in the grid, arrow keys, Home and End, Space or Enter to select), has loading, error, and fully-booked states, and takes you to sign in and back to the same day if your session ends. An admin who opens an inactive resource sees a notice instead of a grid, because nobody can book it.
   - **Checked** in headless Edge at desktop and phone sizes, including two members racing for the same slot. There are no automated tests for the screens (PLAN.md §3), and a screen reader hasn't been tried yet (M7).
 
+- **My bookings and cancellation (M6):**
+  - **Your bookings:** My bookings lists Upcoming (soonest first) and History (newest first) as a table on a wide screen and as cards on a phone, with resource, date, time in IST, duration and status: Confirmed, In progress, Completed or Cancelled. A booking that has started shows "In progress" and can no longer be cancelled; the page notices when that happens while it is open. Each list shows up to 50 bookings and says so. The list you are on is in the address (`?view=history`), so it can be bookmarked.
+  - **Cancelling:** "Cancel" asks for confirmation, showing the booking, then cancels all of its slots at once; they are free to book again straight away. A request is sent only once, however often the button is pressed. If the booking was cancelled elsewhere, has started, or isn't yours, the page says which and refreshes. If the answer to a cancellation is lost, the page says it can't tell whether it went through and offers to refresh the list, rather than guessing. The same care is taken when booking: "Nothing was booked" is only said after the server has definitely refused.
+  - **Admins:** an extra "All members" view lists everyone's bookings with who made them, and an admin can cancel any upcoming booking. Members can't: the server answers 403 for the admin list and 404 for someone else's booking, whatever the page does.
+  - **Checked** in headless Edge at desktop and phone sizes, including a lost cancellation answer, a session that ends while the dialog is open, and an admin cancelling a member's booking. As before, there are no automated tests for the screens and a screen reader hasn't been tried yet (M7).
+
 ### Planned, not built
 
-- **M6:** My bookings with cancellation, plus an admin view of all bookings. Until then a booking can be made but not cancelled in the app.
-- **M7:** polish, accessibility checks and a final pass over this README. **M8** (optional): deployment.
+- **M7:** polish, accessibility checks (including a screen reader) and a final pass over this README. **M8** (optional): deployment.
 
 Deliberately out of scope for the MVP: approval workflows, recurring bookings, notifications, calendar sync, password reset and a user-management UI (PLAN.md §3).
 

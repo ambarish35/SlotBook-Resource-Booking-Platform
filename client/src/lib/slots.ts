@@ -1,5 +1,5 @@
-import { type AvailabilitySlot, MAX_SLOTS, type SlotConflict } from './bookings';
-import { timeLabel } from './ist';
+import { type AvailabilitySlot, type Booking, MAX_SLOTS, type SlotConflict } from './bookings';
+import { shortDateLabel, timeLabel } from './ist';
 
 /** The three labelled groups of 8 slots (DESIGN.md §5.4): 08:00–11:30, 12:00–15:30 and 16:00–19:30. */
 export const SLOT_GROUPS = [
@@ -29,7 +29,7 @@ export function rangeLabel(range: Pick<TimeRange, 'text'>): string {
  * The slots in `starts`, merged into spans of consecutive slots, in time order. Two slots are consecutive when
  * the first one's end is the second one's start, as the API reports them.
  */
-export function toRanges(slots: readonly AvailabilitySlot[], starts: readonly string[]): TimeRange[] {
+export function toRanges(slots: readonly Pick<AvailabilitySlot, 'start' | 'end'>[], starts: readonly string[]): TimeRange[] {
   const wanted = new Set(starts);
   const spans: Omit<TimeRange, 'text'>[] = [];
   for (const slot of slots) {
@@ -43,6 +43,35 @@ export function toRanges(slots: readonly AvailabilitySlot[], starts: readonly st
     }
   }
   return spans.map((span) => ({ ...span, text: `${timeLabel(span.start)}–${timeLabel(span.end)}` }));
+}
+
+const SLOT_MS = 30 * 60_000;
+
+/**
+ * A booking's slots merged into spans of consecutive slots. A booking may hold slots that aren't consecutive (10:00
+ * and 14:00), so it can have several. Each slot is 30 minutes long (PLAN.md §10).
+ */
+export function bookingRanges(booking: Pick<Booking, 'slotStarts'>): TimeRange[] {
+  const slots = booking.slotStarts.map((start) => ({
+    start: new Date(start).toISOString(),
+    end: new Date(Date.parse(start) + SLOT_MS).toISOString(),
+  }));
+  return toRanges(
+    slots,
+    slots.map((slot) => slot.start),
+  );
+}
+
+/** "Room A · Sat, 14 Nov · 10:00–11:00 IST": a booking in the title of a message (DESIGN.md §5.7). */
+export function describeBooking(booking: Booking): string {
+  const times = bookingRanges(booking).map(rangeLabel).join(', ');
+  return `${booking.resource.name} · ${shortDateLabel(booking.date)} · ${times}`;
+}
+
+/** "Room A, Sat 14 Nov, 10:00–11:00 IST": the same, for screen-reader-only text after a button's visible label. */
+export function spokenBooking(booking: Booking): string {
+  const times = bookingRanges(booking).map(rangeLabel).join(' and ');
+  return `${booking.resource.name}, ${shortDateLabel(booking.date).replace(',', '')}, ${times}`;
 }
 
 /** "30 min", "1 h", "1 h 30 min": the length of `count` 30-minute slots. */
